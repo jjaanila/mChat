@@ -72,6 +72,16 @@ class Client():
         message_format = "PART" + " " + room + "\n"
         self.socket.send(message_format.encode())
         
+    def printHelp(self):
+        print("""Commands:
+/connect <IP> <Port>
+/disconnect
+/join <room_name>
+/part <room_name>
+/quit
+/msg <room_name> <message>
+/help""")
+        
     def processInput(self):
         terminal_input = input(self.nick + ": ")
         if (terminal_input.find("/") == 0):
@@ -101,8 +111,11 @@ class Client():
             
         elif (command[0] == "/msg"):
             if (hasEnoughArguments(command, 2)):
-                self.sendMessage(command[1], command[2]) 
-                  
+                self.sendMessage(command[1], command[2])
+                
+        elif (command[0] == "/help"):
+            self.printHelp()
+                   
         else:
             print("Unknown command.") 
         
