@@ -6,7 +6,7 @@ import sys, socket, threading
 
 def hasEnoughArguments(command, required_n):
         if (len(command) != required_n + 1):
-            print("This command requires " + str(required_n) + " arguments!")
+            print("This command requires " + str(required_n) + " argument(s)!")
             return False
         return True
 
@@ -25,11 +25,11 @@ class Client():
         return True
     
     def connect(self, ip, port):
+        self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         try:
-            self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            self.socket.connect((ip, port))
-        except:
-            print("Failed to connect", ip, port)
+            self.socket.connect((ip, int(port)))
+        except ConnectionError as e:
+            print("Failed to connect", ip, port, "due to", e)
             self.socket = None
             return
         print("Connected to", ip, port)
@@ -52,6 +52,14 @@ class Client():
         message_format = "MSG" + " " + self.nick + " " + room + " " + message + "\n"
         self.socket.send(message_format.encode())
         
+    def changeNick(self, new_nick):
+        if (len(new_nick) > 32):
+            print("Too long nick!")
+        elif (len(new_nick) == 0):
+            print("You did not give a proper nick.")
+        else:
+            self.nick = new_nick
+        
     def join(self, room):#TODO: NW PART
         if (not self.isConnected()):
             return
@@ -59,6 +67,7 @@ class Client():
             print("You are in that room already!")
             return
         self.rooms.append(room)
+        print("Joined room", room)
         message_format = "JOIN" + " " + room + "\n"
         self.socket.send(message_format.encode())
     
@@ -69,6 +78,7 @@ class Client():
             print("You are not in that room yet!")
             return
         self.rooms.remove(room)
+        print("Left room", room)
         message_format = "PART" + " " + room + "\n"
         self.socket.send(message_format.encode())
         
@@ -80,6 +90,7 @@ class Client():
 /part <room_name>
 /quit
 /msg <room_name> <message>
+/nick <new_nick>
 /help""")
         
     def processInput(self):
@@ -112,6 +123,10 @@ class Client():
         elif (command[0] == "/msg"):
             if (hasEnoughArguments(command, 2)):
                 self.sendMessage(command[1], command[2])
+                
+        elif (command[0] == "/nick"):
+            if (hasEnoughArguments(command, 1)):
+                self.changeNick(command[1])
                 
         elif (command[0] == "/help"):
             self.printHelp()
