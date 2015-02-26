@@ -2,7 +2,7 @@
 mChat client software.
 """
 
-import sys, socket, threading
+import sys, socket, threading, time
 
 def hasEnoughArguments(command, required_n):
         if (len(command) != required_n + 1):
@@ -24,6 +24,20 @@ class Client():
             return False
         return True
     
+    def receiveMessages(self):
+        while(True):
+            data = ""
+            while(not '\n' in data):
+                data += self.socket.recv(Client.BUFFER_SIZE).decode()
+            
+            data = data.rstrip('\n')
+            protocol_msg = data.split(" ", 3)
+            if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
+                print("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+            else:
+                print("Unidentified message: " + data)#Debug
+            time.sleep(0.5)
+    
     def connect(self, ip, port):
         self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         try:
@@ -32,6 +46,9 @@ class Client():
             print("Failed to connect", ip, port, "due to", e)
             self.socket = None
             return
+        t = threading.Thread(target=self.receiveMessages)
+        t.daemon = True
+        t.start()
         print("Connected to", ip, port)
         
     def disconnect(self):
@@ -50,7 +67,7 @@ class Client():
         print("<" + room + "> " + self.nick + ": " + message)
         
         message_format = "MSG" + " " + self.nick + " " + room + " " + message + "\n"
-        self.socket.send(message_format.encode())
+        self.socket.sendall(message_format.encode())
         
     def changeNick(self, new_nick):
         if (len(new_nick) > 32):
@@ -69,7 +86,7 @@ class Client():
         self.rooms.append(room)
         print("Joined room", room)
         message_format = "JOIN" + " " + room + "\n"
-        self.socket.send(message_format.encode())
+        self.socket.sendall(message_format.encode())
     
     def part(self, room):#TODO: NW PART
         if (not self.isConnected()):
@@ -80,7 +97,7 @@ class Client():
         self.rooms.remove(room)
         print("Left room", room)
         message_format = "PART" + " " + room + "\n"
-        self.socket.send(message_format.encode())
+        self.socket.sendall(message_format.encode())
         
     def printHelp(self):
         print("""Commands:
@@ -92,13 +109,13 @@ class Client():
 /msg <room_name> <message>
 /nick <new_nick>
 /help""")
-        
+
     def processInput(self):
         terminal_input = input(self.nick + ": ")
         if (terminal_input.find("/") == 0):
-            command = terminal_input.split(" ")
+            command = terminal_input.split(" ", 2)
         else:
-            print("Invalid input.")
+            print("Invalid input. Commands should start with /")
             return
         
         if (command[0] == "/connect"):
@@ -132,15 +149,14 @@ class Client():
             self.printHelp()
                    
         else:
-            print("Unknown command.") 
+            print("Unknown command.")
         
     def run(self):
-        #self.receiveMessages() to own thread
         while(True):
             self.processInput()
 
 def main():
-    client = Client("Seppo")
+    client = Client("mChatter")
     client.run()
 
 
