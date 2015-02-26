@@ -28,6 +28,7 @@ class Client():
         while(True):
             data = ""
             while(not '\n' in data):
+                time.sleep(0.1)
                 data += self.socket.recv(Client.BUFFER_SIZE).decode()
             
             data = data.rstrip('\n')
@@ -36,7 +37,6 @@ class Client():
                 print("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
             else:
                 print("Unidentified message: " + data)#Debug
-            time.sleep(0.5)
     
     def connect(self, ip, port):
         self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
