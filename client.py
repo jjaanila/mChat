@@ -77,7 +77,7 @@ class Client():
         else:
             self.nick = new_nick
         
-    def join(self, room):#TODO: NW PART
+    def join(self, room):
         if (not self.isConnected()):
             return
         if (room in self.rooms):
@@ -88,7 +88,7 @@ class Client():
         message_format = "JOIN" + " " + room + "\n"
         self.socket.sendall(message_format.encode())
     
-    def part(self, room):#TODO: NW PART
+    def part(self, room):
         if (not self.isConnected()):
             return
         if (not room in self.rooms):
