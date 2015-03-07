@@ -3,9 +3,11 @@ class ChannelManager():
         self.channels = {}
 
     def join(self, socket, channel):
-        # If channel exists, make socket join it
+        # If channel exists make socket join it
         if channel in self.channels:
-            self.channels[channel].append(socket)
+            # Check that socket not already joined
+            if socket not in self.channels[channel]:
+                self.channels[channel].append(socket)
         # If channel doesn't exist create the channel list and add socket as the only subscriber
         else:
             self.channels[channel] = [socket]

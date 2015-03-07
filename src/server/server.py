@@ -57,9 +57,10 @@ class SelectServer(Daemon):
                                 continue  # ignore invalid message
                         elif len(protocol_msg) == 4:
                             if protocol_msg[0] == "MSG":
-                                # Broadcast message to other clients
-                                # TODO: send to servers in addition to clients
-                                self.broadcast_channel((message + "\n").encode(), protocol_msg[2], [sock])
+                                # Limit so that MSG can only be sent if joined the channel first
+                                if sock in self.channels.get(protocol_msg[2]):
+                                    self.broadcast_channel((message + "\n").encode(), protocol_msg[2], [sock])
+                                    # TODO: send to servers in addition to clients
                             else:
                                 continue  # ignore invalid message
                         else:
