@@ -2,14 +2,19 @@ import socket
 import select
 from daemon import Daemon
 from channelmanager import ChannelManager
+from channelmanager import ChannelJoinError
 
 
 class SelectServer(Daemon):
     RECV_BUFFER = 1024
+    MAX_SERVERS = 1000  # TODO: make use of this value
+    MAX_CLIENTS = 10000  # TODO: limit self.connection_list with this
+    MAX_CHANNELS = 30000
+    MAX_CLIENTS_PER_CHANNEL = 10000  # probably good if this just equals MAX_CLIENTS
 
     def __init__(self, ip, port, pidfile):
         self.connection_list = []
-        self.channels = ChannelManager()
+        self.channels = ChannelManager(SelectServer.MAX_CHANNELS, SelectServer.MAX_CLIENTS_PER_CHANNEL)
         self.ip = ip
         self.port = port
         self.listen_socket = None
@@ -71,8 +76,16 @@ class SelectServer(Daemon):
                         self.close_client(sock)
                         continue
                     # Not valid unicode message, ignore the message
-                    except (UnicodeDecodeError, UnicodeEncodeError) as e:
+                    except (UnicodeDecodeError, UnicodeEncodeError):
                         continue
+                    # Unable to join a channel
+                    except ChannelJoinError:
+                        """
+                        TODO: Here we should tell the client that joining channel was not successful.
+                              The protocol doesn't support this yet, so let's just continue.
+                        """
+                        continue
+
 
         self.listen_socket.close()
 

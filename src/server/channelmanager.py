@@ -1,5 +1,11 @@
+class ChannelJoinError(Exception):
+    pass
+
+
 class ChannelManager():
-    def __init__(self):
+    def __init__(self, max_channels, max_members):
+        self.max_channels = max_channels
+        self.max_members = max_members
         self.channels = {}
 
     def join(self, socket, channel):
@@ -7,10 +13,16 @@ class ChannelManager():
         if channel in self.channels:
             # Check that socket not already joined
             if socket not in self.channels[channel]:
-                self.channels[channel].append(socket)
+                if len(self.channels[channel]) < self.max_members:
+                    self.channels[channel].append(socket)
+                else:
+                    raise ChannelError("Too many members on channel. Unable to add more.")
         # If channel doesn't exist create the channel list and add socket as the only subscriber
         else:
-            self.channels[channel] = [socket]
+            if len(self.channels) < self.max_channels:
+                self.channels[channel] = [socket]
+            else:
+                raise ChannelError("Too many channels. Can't create more.")
 
     # Part socket from channel but doesn't delete channel if it is empty.
     # Instead returns false if channel is empty and has to be deleted, otherwise returns true
