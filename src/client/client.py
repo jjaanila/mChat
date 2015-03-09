@@ -39,13 +39,26 @@ class Client():
                 print("Unidentified message: " + data)#Debug
     
     def connect(self, ip, port):
-        self.socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        try:
-            self.socket.connect((ip, int(port)))
-        except ConnectionError as e:
-            print("Failed to connect", ip, port, "due to", e)
-            self.socket = None
+        sock = None
+        for result in socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
+            family, socktype, proto, _, addr = result
+            try:
+                sock = socket.socket(family, socktype, proto)
+            except socket.error:
+                sock = None
+                continue
+            try:
+                sock.connect(addr)
+            except socket.error as e:
+                print("Failed to connect", ip, port, "due to", e)
+                sock.close()
+                sock = None
+                continue
+            break
+        if (sock == None):
+            print("Connection failed")
             return
+        self.socket = sock
         t = threading.Thread(target=self.receiveMessages)
         t.daemon = True
         t.start()
@@ -134,7 +147,7 @@ class Client():
                 self.part(command[1])
                 
         elif (command[0] == "/quit"):
-            self.socket.close()
+            self.disconnect()
             sys.exit()
             
         elif (command[0] == "/msg"):
