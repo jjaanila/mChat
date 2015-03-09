@@ -3,6 +3,7 @@ mChat client software.
 """
 
 import sys, socket, threading, time
+from timer import Timer
 
 def hasEnoughArguments(command, required_n):
         if (len(command) != required_n + 1):
@@ -18,6 +19,9 @@ class Client():
         self.nick = nick
         self.rooms = []
         
+        self.heartbleed_interval = 2
+        self.heartbleed_timer = Timer(6)
+        
     def isConnected(self):
         if (self.socket == None):
             print("There is no connection.")
@@ -25,16 +29,21 @@ class Client():
         return True
     
     def receiveMessages(self):
-        while(True):
+        while(self.socket != None):
             data = ""
             while(not '\n' in data):
                 time.sleep(0.1)
+                self.checkTimers()#Just put this somewhere.
+                if self.socket == None:
+                    return
                 data += self.socket.recv(Client.BUFFER_SIZE).decode()
             
             data = data.rstrip('\n')
             protocol_msg = data.split(" ", 3)
             if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
                 print("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+            elif protocol_msg == "HEARTBLEED":
+                self.heartbleed_timer.start()
             else:
                 print("Unidentified message: " + data)#Debug
     
@@ -62,13 +71,17 @@ class Client():
         t = threading.Thread(target=self.receiveMessages)
         t.daemon = True
         t.start()
+        self.sendKeepAliveMessage()#Will continue sending in a separate thread.
+        self.heartbleed_timer.start()
         print("Connected to", ip, port)
         
     def disconnect(self):
         if (not self.isConnected()):
             return
+        self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
         self.socket = None
+        self.heartbleed_timer.reset()
         print("Disconnected")
         
     def sendMessage(self, room, message):
@@ -112,6 +125,18 @@ class Client():
         message_format = "PART" + " " + room + "\n"
         self.socket.sendall(message_format.encode())
         
+    def sendKeepAliveMessage(self):
+        if self.socket != None:
+            self.socket.sendall("HEARTBLEED\n".encode())
+            thread = threading.Timer(self.heartbleed_interval, self.sendKeepAliveMessage)
+            thread.daemon = True # the main thread won't wait for this thread after exiting
+            thread.start()
+            
+    def checkTimers(self):
+        if (self.heartbleed_timer.hasExpired()):
+            print("Server lost! Disconnecting...")
+            self.disconnect()
+        
     def printHelp(self):
         print("""Commands:
 /connect <IP> <Port>
@@ -124,51 +149,52 @@ class Client():
 /help""")
 
     def processInput(self):
-        terminal_input = input(self.nick + ": ")
-        if (terminal_input.find("/") == 0):
-            command = terminal_input.split(" ", 2)
-        else:
-            print("Invalid input. Commands should start with /")
-            return
-        
-        if (command[0] == "/connect"):
-            if (hasEnoughArguments(command, 2)):
-                self.connect(command[1], command[2])
-                
-        elif (command[0] == "/disconnect"):
-            self.disconnect()
+        while(True):
+            terminal_input = input("")
+            if (terminal_input.find("/") == 0):
+                command = terminal_input.split(" ", 2)
+            else:
+                print("Invalid input. Commands should start with /")
+                return
             
-        elif (command[0] == "/join"):
-            if (hasEnoughArguments(command, 1)):
-                self.join(command[1])
+            if (command[0] == "/connect"):
+                if (hasEnoughArguments(command, 2)):
+                    self.connect(command[1], command[2])
+                    
+            elif (command[0] == "/disconnect"):
+                self.disconnect()
+                
+            elif (command[0] == "/join"):
+                if (hasEnoughArguments(command, 1)):
+                    self.join(command[1])
+                           
+            elif (command[0] == "/part"):
+                if (hasEnoughArguments(command, 1)):
+                    self.part(command[1])
+                    
+            elif (command[0] == "/quit"):
+                self.disconnect()
+                sys.exit()
+                
+            elif (command[0] == "/msg"):
+                if (hasEnoughArguments(command, 2)):
+                    self.sendMessage(command[1], command[2])
+                    
+            elif (command[0] == "/nick"):
+                if (hasEnoughArguments(command, 1)):
+                    self.changeNick(command[1])
+                    
+            elif (command[0] == "/help"):
+                self.printHelp()
                        
-        elif (command[0] == "/part"):
-            if (hasEnoughArguments(command, 1)):
-                self.part(command[1])
-                
-        elif (command[0] == "/quit"):
-            self.disconnect()
-            sys.exit()
-            
-        elif (command[0] == "/msg"):
-            if (hasEnoughArguments(command, 2)):
-                self.sendMessage(command[1], command[2])
-                
-        elif (command[0] == "/nick"):
-            if (hasEnoughArguments(command, 1)):
-                self.changeNick(command[1])
-                
-        elif (command[0] == "/help"):
-            self.printHelp()
-                   
-        else:
-            print("Unknown command.")
+            else:
+                print("Unknown command.")
         
     def run(self):
-        while(True):
-            self.processInput()
+        self.processInput()
 
 def main():
+    print("mChat client at your service. Type /help for instructions.")
     client = Client("mChatter")
     client.run()
 
