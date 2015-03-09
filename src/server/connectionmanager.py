@@ -8,14 +8,14 @@ class ConnectionManager():
 
         # Same index in these three list means that the values belong to same connection
         self.sockets = []  # Socket objects
-        self.heartbeats = []  # Boolean values: True means a heartbeat has been received, False means no heartbeat
+        self.heartbleeds = []  # Boolean values: True means a heartbleed has been received, False means no heartbleed
         self.listen_addrs = []  # A tuple with ip/dns as string and port as integer
 
     def add(self, sock, listen_addr=None):
         if len(self.sockets) < self.max_connections:
             if sock not in self.sockets:
                 self.sockets.append(sock)
-                self.heartbeats.append(True)
+                self.heartbleeds.append(True)
                 self.listen_addrs.append(listen_addr)
             else:
                 raise ConnectionAddError("Socket is already added.")
@@ -26,7 +26,7 @@ class ConnectionManager():
         try:
             conn_index = self.sockets.index(sock)
             self.sockets.pop(conn_index)
-            self.heartbeats.pop(conn_index)
+            self.heartbleeds.pop(conn_index)
             self.listen_addrs.pop(conn_index)
 
         # Socket not in self.sockets. No need to do anything special.
