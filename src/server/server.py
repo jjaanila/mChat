@@ -3,17 +3,19 @@ import select
 from daemon import Daemon
 from channelmanager import ChannelManager
 from channelmanager import ChannelJoinError
+from connectionmanager import ConnectionManager
+from connectionmanager import ConnectionAddError
 
 
 class SelectServer(Daemon):
     RECV_BUFFER = 1024
     MAX_SERVERS = 1000  # TODO: make use of this value
-    MAX_CLIENTS = 10000  # TODO: limit self.connection_list with this
+    MAX_CLIENTS = 10000
     MAX_CHANNELS = 30000
     MAX_CLIENTS_PER_CHANNEL = 10000  # probably good if this just equals MAX_CLIENTS
 
     def __init__(self, ip, port, pidfile):
-        self.connection_list = []
+        self.clients = ConnectionManager(SelectServer.MAX_CLIENTS)
         self.channels = ChannelManager(SelectServer.MAX_CHANNELS, SelectServer.MAX_CLIENTS_PER_CHANNEL)
         self.ip = ip
         self.port = port
@@ -28,23 +30,29 @@ class SelectServer(Daemon):
         self.listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.listen_socket.bind((self.ip, self.port))
         self.listen_socket.listen(128)  # parameter value = maximum number of queued connections
-        self.connection_list.append(self.listen_socket)
 
         print("Server started on port " + str(self.port))
 
         while running:
-            read_sockets, write_sockets, error_sockets = select.select(self.connection_list, [], [], 15)
+            read_sockets, write_sockets, error_sockets = select.select(self.clients.sockets + [self.listen_socket], [], [], 15)
 
             for sock in read_sockets:
 
                 # New connection attempt to listen_socket
                 if sock == self.listen_socket:
                     sockfd, addr = self.listen_socket.accept()
-                    self.connection_list.append(sockfd)
-
-                    # Tell about the new connection to server admin and other clients
-                    print("Client connected, IP: %s, port: %s" % (addr[0], addr[1]))
-                    self.broadcast_clients(str.encode("Client connected, IP: %s, port: %s\n" % (addr[0], addr[1])), [sockfd])
+                    try:
+                        self.clients.add(sockfd)
+                        # Tell about the new connection to server admin and other clients
+                        print("Client connected, IP: %s, port: %s" % (addr[0], addr[1]))
+                        self.broadcast_clients(str.encode("Client connected, IP: %s, port: %s\n" % (addr[0], addr[1])), [sockfd])
+                    except ConnectionAddError:
+                        """
+                        TODO: Tell client that server is full. Our protocol doesn't define how to do this so let's
+                              just rudely close the connection and continue.
+                        """
+                        sockfd.close()
+                        continue
 
                 # Incoming message from a client
                 else:
@@ -86,13 +94,12 @@ class SelectServer(Daemon):
                         """
                         continue
 
-
         self.listen_socket.close()
 
     # Helper method for broadcasting to every other socket except sock (given as parameter)
     # and self.listen_sock
     def broadcast_clients(self, message, blacklist=None):
-        self.broadcast_list(message, self.connection_list, blacklist)
+        self.broadcast_list(message, self.clients.sockets, blacklist)
 
     def broadcast_channel(self, message, channel, blacklist=None):
         socklist = self.channels.get(channel)
@@ -140,5 +147,4 @@ class SelectServer(Daemon):
         self.channels.part_all(client_sock)
 
         client_sock.close()
-        if client_sock in self.connection_list:
-            self.connection_list.remove(client_sock)
+        self.clients.remove(client_sock)
