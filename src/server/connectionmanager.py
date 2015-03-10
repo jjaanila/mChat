@@ -3,19 +3,24 @@ class ConnectionAddError(Exception):
 
 
 class ConnectionManager():
-    def __init__(self, max_connections):
-        self.max_connections = max_connections
+    TYPE_UNKNOWN = 0
+    TYPE_SERVER = 1
+    TYPE_CLIENT = 2
 
+    def __init__(self, max_connections, conn_type):
+        self.max_connections = max_connections
+        self.type = conn_type  # receives one of the values defined in class variables
         # Same index in these three list means that the values belong to same connection
         self.sockets = []  # Socket objects
-        self.heartbleeds = []  # Boolean values: True means a heartbleed has been received, False means no heartbleed
+        self.heartbleed_status = []  # Integer telling how many HEART\n messages have not been answered with BLEED\n
+                                     # message. Negative value means that an answer has been received during that cycle
         self.listen_addrs = []  # A tuple with ip/dns as string and port as integer
 
     def add(self, sock, listen_addr=None):
         if len(self.sockets) < self.max_connections:
             if sock not in self.sockets:
                 self.sockets.append(sock)
-                self.heartbleeds.append(True)
+                self.heartbleed_status.append(-1)
                 self.listen_addrs.append(listen_addr)
             else:
                 raise ConnectionAddError("Socket is already added.")
@@ -25,10 +30,23 @@ class ConnectionManager():
     def remove(self, sock):
         try:
             conn_index = self.sockets.index(sock)
-            self.sockets.pop(conn_index)
-            self.heartbleeds.pop(conn_index)
-            self.listen_addrs.pop(conn_index)
-
+            self.pop(conn_index)
         # Socket not in self.sockets. No need to do anything special.
+        except ValueError:
+            return
+
+    def pop(self, i):
+        try:
+            sock = self.sockets.pop(i)
+            status = self.heartbleed_status.pop(i)
+            addr = self.listen_addrs.pop(i)
+            return (sock, status, addr)
+        except IndexError:
+            return None
+
+    def set_heartbleed_received(self, sock):
+        try:
+            conn_index = self.sockets.index(sock)
+            self.heartbleed_status[conn_index] = -1
         except ValueError:
             return

@@ -5,6 +5,7 @@ from channelmanager import ChannelManager
 from channelmanager import ChannelJoinError
 from connectionmanager import ConnectionManager
 from connectionmanager import ConnectionAddError
+from timer import Timer
 
 
 class SelectServer(Daemon):
@@ -13,17 +14,20 @@ class SelectServer(Daemon):
     MAX_CLIENTS = 10000
     MAX_CHANNELS = 30000
     MAX_CLIENTS_PER_CHANNEL = 10000  # probably good if this just equals MAX_CLIENTS
+    HEARTBLEED_INTERVAL = 2  # seconds
+    MISSING_HEARTBLEEDS_ACCEPTED = 2  # the server closes connection when MORE than this amount of heartbleed requests
+                                      # are missing in a row
 
     def __init__(self, ip, port, pidfile):
-        self.clients = ConnectionManager(SelectServer.MAX_CLIENTS)
+        self.clients = ConnectionManager(SelectServer.MAX_CLIENTS, ConnectionManager.TYPE_CLIENT)
         self.channels = ChannelManager(SelectServer.MAX_CHANNELS, SelectServer.MAX_CLIENTS_PER_CHANNEL)
         self.ip = ip
         self.port = port
         self.listen_socket = None
+        self.heartbleed_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
         super(SelectServer, self).__init__(pidfile)
 
     def run(self):
-        running = True
 
         # Listen socket for accepting incoming connections
         self.listen_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
@@ -32,9 +36,15 @@ class SelectServer(Daemon):
         self.listen_socket.listen(128)  # parameter value = maximum number of queued connections
 
         print("Server started on port " + str(self.port))
+        self.heartbleed_timer.start()
 
-        while running:
-            read_sockets, write_sockets, error_sockets = select.select(self.clients.sockets + [self.listen_socket], [], [], 15)
+        while True:
+
+            if self.heartbleed_timer.has_expired():
+                self.process_heartbleeds()
+                self.heartbleed_timer.start()
+
+            read_sockets, write_sockets, error_sockets = select.select(self.clients.sockets + [self.listen_socket], [], [], SelectServer.HEARTBLEED_INTERVAL)
 
             for sock in read_sockets:
 
@@ -55,13 +65,15 @@ class SelectServer(Daemon):
                         continue
 
                 # Incoming message from a client
-                else:
+                elif sock in self.clients.sockets:
                     try:
                         data = self.recv_until_newline(sock)
                         message = data.decode()  # decode bytes to utf-8
                         protocol_msg = message.split(" ", 3)
-
-                        if len(protocol_msg) == 2:
+                        if len(protocol_msg) == 1:
+                            if protocol_msg[0] == "BLEED":
+                                self.clients.set_heartbleed_received(sock)
+                        elif len(protocol_msg) == 2:
                             if protocol_msg[0] == "JOIN":
                                 self.channels.join(sock, protocol_msg[1])
                             elif protocol_msg[0] == "PART":
@@ -94,8 +106,6 @@ class SelectServer(Daemon):
                         """
                         continue
 
-        self.listen_socket.close()
-
     # Helper method for broadcasting to every other socket except sock (given as parameter)
     # and self.listen_sock
     def broadcast_clients(self, message, blacklist=None):
@@ -112,10 +122,11 @@ class SelectServer(Daemon):
         for recv_socket in socklist:
             if recv_socket != self.listen_socket and recv_socket not in blacklist:
                 try:
-                    recv_socket.send(message)
+                    recv_socket.sendall(message)
                 except socket.error:
                     # Broken connection, close it
                     self.close_client(recv_socket)
+                    # TODO: Add correct behavior in case recv_socket is not a client
 
     # Call recv() until newline (success) or RECV_BUFFER bytes received
     # Returns message received before newline. Does NOT return the newline character.
@@ -148,3 +159,36 @@ class SelectServer(Daemon):
 
         client_sock.close()
         self.clients.remove(client_sock)
+
+    def close_server(self, server_sock):
+        pass  # TODO: implement
+
+    def process_heartbleeds(self):
+        self.check_heartbleed_responses(self.clients)
+        # TODO: check server responses
+
+        self.send_heartbleed_requests(self.clients)
+        # TODO: send server requests
+
+    def check_heartbleed_responses(self, conn_manager):
+        # Check if previous HEART\m messages were answered
+        for i in range(len(conn_manager.heartbleed_status)):
+            if conn_manager.heartbleed_status[i] < 0:
+                conn_manager.heartbleed_status[i] = 0
+            elif conn_manager.heartbleed_status[i] < SelectServer.MISSING_HEARTBLEEDS_ACCEPTED:
+                conn_manager.heartbleed_status[i] += 1
+            else:
+                if conn_manager.type == ConnectionManager.TYPE_CLIENT:
+                    self.close_client(conn_manager.sockets[i])
+                elif conn_manager.type == ConnectionManager.TYPE_SERVER:
+                    self.close_server(conn_manager.sockets[i])
+
+    def send_heartbleed_requests(self, conn_manager):
+        for sock in conn_manager.sockets:
+            try:
+                sock.sendall("HEART\n".encode())
+            except socket.error:
+                if conn_manager.type == ConnectionManager.TYPE_CLIENT:
+                    self.close_client(sock)
+                elif conn_manager.type == ConnectionManager.TYPE_SERVER:
+                    self.close_server(sock)
