@@ -11,14 +11,15 @@ def hasEnoughArguments(command, required_n):
             return False
         return True
 
-class Client():
+class Client:
     BUFFER_SIZE = 1024
     
-    def __init__(self, nick):
+    def __init__(self, nick, is_heartbleed_on):
         self.socket = None
         self.nick = nick
         self.rooms = []
         
+        self.heartbleed_on = is_heartbleed_on
         self.heartbleed_interval = 2
         self.heartbleed_timer = Timer(6)
         
@@ -40,10 +41,14 @@ class Client():
             
             data = data.rstrip('\n')
             protocol_msg = data.split(" ", 3)
+
             if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
                 print("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
-            elif protocol_msg == "HEARTBLEED":
-                self.heartbleed_timer.start()
+            elif protocol_msg[0] == "HEART":
+                self.socket.sendall("BLEED\n".encode())
+            elif protocol_msg[0] == "BLEED":
+                if self.heartbleed_on:
+                    self.heartbleed_timer.start()
             else:
                 print("Unidentified message: " + data)#Debug
     
@@ -71,8 +76,9 @@ class Client():
         t = threading.Thread(target=self.receiveMessages)
         t.daemon = True
         t.start()
-        self.sendKeepAliveMessage()#Will continue sending in a separate thread.
-        self.heartbleed_timer.start()
+        if self.heartbleed_on:
+            self.sendKeepAliveMessage()#Will continue sending in a separate thread.
+            self.heartbleed_timer.start()
         print("Connected to", ip, port)
         
     def disconnect(self):
@@ -127,15 +133,16 @@ class Client():
         
     def sendKeepAliveMessage(self):
         if self.socket != None:
-            self.socket.sendall("HEARTBLEED\n".encode())
+            self.socket.sendall("HEART\n".encode())
             thread = threading.Timer(self.heartbleed_interval, self.sendKeepAliveMessage)
             thread.daemon = True # the main thread won't wait for this thread after exiting
             thread.start()
             
     def checkTimers(self):
-        if (self.heartbleed_timer.hasExpired()):
-            print("Server lost! Disconnecting...")
-            self.disconnect()
+        if self.heartbleed_on:
+            if (self.heartbleed_timer.hasExpired()):
+                print("Server lost! Disconnecting...")
+                self.disconnect()
         
     def printHelp(self):
         print("""Commands:
@@ -155,7 +162,7 @@ class Client():
                 command = terminal_input.split(" ", 2)
             else:
                 print("Invalid input. Commands should start with /")
-                return
+                continue
             
             if (command[0] == "/connect"):
                 if (hasEnoughArguments(command, 2)):
@@ -194,8 +201,12 @@ class Client():
         self.processInput()
 
 def main():
+    heartbleed_on = False
+    if len(sys.argv) > 1:
+        if "-h" in sys.argv:
+            heartbleed_on = True
     print("mChat client at your service. Type /help for instructions.")
-    client = Client("mChatter")
+    client = Client("mChatter", heartbleed_on)
     client.run()
 
 
