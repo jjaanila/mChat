@@ -60,8 +60,11 @@ class SelectServer(Daemon):
                 candidate_server_socket = None
                 candidate_server_timer.reset()
 
+            try_to_read_from_sockets = self.clients.sockets + self.servers.sockets + [self.client_listen_socket, self.server_listen_socket]
+            if candidate_server_socket != None:
+                try_to_read_from_sockets.append(candidate_server_socket)
 
-            read_sockets, write_sockets, error_sockets = select.select(self.clients.sockets + self.servers.sockets + [self.client_listen_socket, self.server_listen_socket], [], [], SelectServer.HEARTBLEED_INTERVAL)
+            read_sockets, write_sockets, error_sockets = select.select(try_to_read_from_sockets, [], [], SelectServer.HEARTBLEED_INTERVAL)
 
             for sock in read_sockets:
 
@@ -82,7 +85,7 @@ class SelectServer(Daemon):
                         continue
 
                 elif sock == self.server_listen_socket and candidate_server_socket == None:
-                    sockfd, addr = self.client_server_socket.accept()
+                    sockfd, addr = self.server_listen_socket.accept()
                     print("New server connection attempt, IP: %s" % addr[0])
 
                     try:
@@ -110,7 +113,8 @@ class SelectServer(Daemon):
                         message = data.decode()  # decode bytes to utf-8
                         protocol_msg = message.split(" ")
                         if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
-                            self.servers.add(sock, (protocol_msg[1], int(protocol_msg[0])))
+                            self.servers.add(sock, (protocol_msg[1], int(protocol_msg[2])))
+                            print("Server connected, IP: %s, server listen port: %s" % (protocol_msg[1], protocol_msg[2]))
                             candidate_server_socket = None
                             candidate_server_timer.reset()
                     except socket.error:
@@ -118,7 +122,8 @@ class SelectServer(Daemon):
                         candidate_server_socket = None
                         candidate_server_timer.reset()
                         continue
-                    except:
+                    except Exception as e:
+                        raise
                         continue  # TODO: list other errors (at least Unicode, ConnectionAdd)
 
 

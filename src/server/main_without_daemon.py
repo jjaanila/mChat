@@ -9,7 +9,7 @@ Convenient for testing...
 def main():
     pidfile = "/tmp/select-server-daemon.pid"
 
-    server = SelectServer(pidfile, "", 6061, 6071)
+    server = SelectServer(pidfile, "::1", 6061, 6071)
     server.run()
 
 if __name__ == "__main__":
