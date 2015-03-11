@@ -82,10 +82,32 @@ class SelectServer(Daemon):
                         continue
 
                 elif sock == self.server_listen_socket and candidate_server_socket == None:
-                    pass  # TODO:
+                    sockfd, addr = self.client_server_socket.accept()
+                    print("New server connection attempt, IP: %s" % addr[0])
+                    candidate_server_socket = sockfd
+
+                    # TODO: Send ALL_ADDRS to sockfd
+
+
+                    candidate_server_timer.start()
 
                 elif sock == candidate_server_socket and candidate_server_socket != None:
-                    pass  # TODO:
+                    try:
+                        data = self.recv_until_newline(sock)
+                        message = data.decode()  # decode bytes to utf-8
+                        protocol_msg = message.split(" ")
+                        if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
+                            self.servers.add(sock, (protocol_msg[1], int(protocol_msg[0])))
+                            candidate_server_socket = None
+                            candidate_server_timer.reset()
+                    except socket.error:
+                        sock.close()
+                        candidate_server_socket = None
+                        candidate_server_timer.reset()
+                        continue
+                    except:
+                        continue  # TODO: list other errors (at least Unicode, ConnectionAdd)
+
 
                 # Incoming message from a client
                 elif sock in self.clients.sockets:
@@ -140,8 +162,6 @@ class SelectServer(Daemon):
                             if len(protocol_msg) != 4:
                                 continue
                             self.broadcast_channel((message + "\n").encode(), protocol_msg[2])
-                        elif protocol_msg_id == "MY_ADDR":
-                            pass  # TODO:
                         elif protocol_msg_id == "ALL_ADDRS":
                             all_addrs = message.split(" ")[1:]
                             if len(all_addrs) % 2 == 1:
