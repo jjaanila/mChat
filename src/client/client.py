@@ -84,6 +84,7 @@ class Client:
     def disconnect(self):
         if (not self.isConnected()):
             return
+        self.rooms = []	
         self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
         self.socket = None
