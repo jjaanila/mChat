@@ -84,12 +84,25 @@ class SelectServer(Daemon):
                 elif sock == self.server_listen_socket and candidate_server_socket == None:
                     sockfd, addr = self.client_server_socket.accept()
                     print("New server connection attempt, IP: %s" % addr[0])
-                    candidate_server_socket = sockfd
 
-                    # TODO: Send ALL_ADDRS to sockfd
+                    try:
+                        message = "ALL_ADDRS"
+                        for address in self.servers.listen_addrs:
+                            new_part = " " + address[0] + " " + str(address[1])
+                            appended_message = message + new_part
+                            if len(appended_message.encode()) >= SelectServer.PROTOCOL_MSG_MAXLEN:
+                                sockfd.sendall((message + "\n").encode())
+                                message = "ALL_ADDRS" + new_part
+                                continue
+                            message = appended_message
+                        sockfd.sendall((message + "\n").encode())
 
+                        candidate_server_timer.start()
+                        candidate_server_socket = sockfd
+                    except socket.error:
+                        sockfd.close()
+                        continue
 
-                    candidate_server_timer.start()
 
                 elif sock == candidate_server_socket and candidate_server_socket != None:
                     try:
