@@ -11,10 +11,10 @@ def main():
 
     if len(sys.argv) == 4:
         if 'start' == sys.argv[1]:
-            server = SelectServer(sys.argv[2], int(sys.argv[3]), pidfile)
+            server = SelectServer(pidfile, sys.argv[2], int(sys.argv[3]))
             server.start()
         elif 'restart' == sys.argv[1]:
-            server = SelectServer(sys.argv[2], int(sys.argv[3]), pidfile)
+            server = SelectServer(pidfile, sys.argv[2], int(sys.argv[3]))
             server.restart()
         else:
             print_instructions(sys.argv[0])
@@ -23,7 +23,7 @@ def main():
 
     elif len(sys.argv) == 2:
         if 'stop' == sys.argv[1]:
-            server = SelectServer("", 5453, pidfile)  # only pidfile has to be correct here
+            server = SelectServer(pidfile, "", 5453)  # only pidfile has to be correct here
             server.stop()
         else:
             print_instructions(sys.argv[0])
