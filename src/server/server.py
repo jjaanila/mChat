@@ -33,10 +33,10 @@ class SelectServer(Daemon):
         self.server_listen_socket = None
         self.client_listen_socket = None
         self.heartbleed_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
+        self.candidate_server_socket = None
         super(SelectServer, self).__init__(pidfile)
 
     def run(self):
-        candidate_server_socket = None
         # Lets give new servers heartbleed interval amount of time to connect
         candidate_server_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
 
@@ -55,14 +55,16 @@ class SelectServer(Daemon):
                 self.process_heartbleeds()
                 self.heartbleed_timer.start()
 
+            if self.candidate_server_socket == None:
+                candidate_server_timer.reset()
             if candidate_server_timer.has_expired():
-                candidate_server_socket.close()
-                candidate_server_socket = None
+                self.candidate_server_socket.close()
+                self.candidate_server_socket = None
                 candidate_server_timer.reset()
 
             try_to_read_from_sockets = self.clients.sockets + self.servers.sockets + [self.client_listen_socket, self.server_listen_socket]
-            if candidate_server_socket != None:
-                try_to_read_from_sockets.append(candidate_server_socket)
+            if self.candidate_server_socket != None:
+                try_to_read_from_sockets.append(self.candidate_server_socket)
 
             read_sockets, write_sockets, error_sockets = select.select(try_to_read_from_sockets, [], [], SelectServer.HEARTBLEED_INTERVAL)
 
@@ -84,7 +86,7 @@ class SelectServer(Daemon):
                         sockfd.close()
                         continue
 
-                elif sock == self.server_listen_socket and candidate_server_socket == None:
+                elif sock == self.server_listen_socket and self.candidate_server_socket == None:
                     sockfd, addr = self.server_listen_socket.accept()
                     print("New server connection attempt, IP: %s" % addr[0])
 
@@ -101,13 +103,13 @@ class SelectServer(Daemon):
                         sockfd.sendall((message + "\n").encode())
 
                         candidate_server_timer.start()
-                        candidate_server_socket = sockfd
+                        self.candidate_server_socket = sockfd
                     except socket.error:
                         sockfd.close()
                         continue
 
 
-                elif sock == candidate_server_socket and candidate_server_socket != None:
+                elif sock == self.candidate_server_socket and self.candidate_server_socket != None:
                     try:
                         data = self.recv_until_newline(sock)
                         message = data.decode()  # decode bytes to utf-8
@@ -115,16 +117,22 @@ class SelectServer(Daemon):
                         if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
                             self.servers.add(sock, (protocol_msg[1], int(protocol_msg[2])))
                             print("Server connected, IP: %s, server listen port: %s" % (protocol_msg[1], protocol_msg[2]))
-                            candidate_server_socket = None
+                            self.candidate_server_socket = None
                             candidate_server_timer.reset()
                     except socket.error:
                         sock.close()
-                        candidate_server_socket = None
-                        candidate_server_timer.reset()
+                        self.candidate_server_socket = None
                         continue
-                    except Exception as e:
-                        raise
-                        continue  # TODO: list other errors (at least Unicode, ConnectionAdd)
+                    # Not valid unicode message, ignore the message
+                    except (UnicodeDecodeError, UnicodeEncodeError):
+                        continue
+                    except ConnectionAddError:
+                        """ TODO: here we should tell the new server that we can not accept any more
+                                  servers (we're full). For now just close the connection.
+                        """
+                        sock.close()
+                        self.candidate_server_socket = None
+                        continue
 
 
                 # Incoming message from a client
@@ -136,13 +144,13 @@ class SelectServer(Daemon):
                         if len(protocol_msg) == 1:
                             if protocol_msg[0] == "BLEED":
                                 self.clients.set_heartbleed_received(sock)
+                            elif protocol_msg[0] == "HEART":
+                                sock.sendall("BLEED\n".encode())
                         elif len(protocol_msg) == 2:
                             if protocol_msg[0] == "JOIN":
                                 self.channels.join(sock, protocol_msg[1])
                             elif protocol_msg[0] == "PART":
                                 self.channels.part(sock, protocol_msg[1])
-                            else:
-                                continue  # ignore invalid message
                         elif len(protocol_msg) == 4:
                             if protocol_msg[0] == "MSG":
                                 # Limit so that MSG can only be sent if joined the channel first
@@ -150,10 +158,6 @@ class SelectServer(Daemon):
                                     broadcast_data = (message + "\n").encode()
                                     self.broadcast_channel(broadcast_data, protocol_msg[2], [sock])
                                     self.broadcast_servers(broadcast_data)
-                            else:
-                                continue  # ignore invalid message
-                        else:
-                            continue  # ignore invalid message
 
                     # Client disconnected
                     except socket.error:
@@ -191,13 +195,18 @@ class SelectServer(Daemon):
                             # Send MY_ADDR as a response
                             my_addr_msg = "MY_ADDR " + self.ip + " " + str(self.server_listen_port) + "\n"
                             sock.sendall(my_addr_msg.encode())
-
-
+                        elif protocol_msg_id == "HEART" and len(message.split(" ")) == 1:
+                            sock.sendall("BLEED\n".encode())
+                        elif protocol_msg_id == "BLEED" and len(message.split(" ")) == 1:
+                            self.servers.set_heartbleed_received(sock)
+                            
                     except socket.error:
                         self.close_server(sock)
                         continue
-                    except:
-                        pass  # TODO: add other errors
+                    # Not valid unicode message, ignore the message
+                    except (UnicodeDecodeError, UnicodeEncodeError):
+                        continue
+                        
 
     # Helper method for broadcasting to every other socket except sock (given as parameter)
     # and self.listen_sock
@@ -223,8 +232,15 @@ class SelectServer(Daemon):
                     recv_socket.sendall(message)
                 except socket.error:
                     # Broken connection, close it
-                    self.close_client(recv_socket)
-                    # TODO: Add correct behavior in case recv_socket is not a client
+                    if recv_socket in self.clients.sockets:
+                        self.close_client(recv_socket)
+                    elif recv_socket in self.servers.sockets:
+                        self.close_server(recv_socket)
+                    elif recv_socket == self.candidate_server_socket:
+                        self.candidate_server_socket.close()
+                        self.candidate_server_socket = None
+                    else:
+                        raise
 
     # Call recv() until newline (success) or PROTOCOL_MSG_MAXLEN bytes received
     # Returns message received before newline. Does NOT return the newline character.
@@ -255,21 +271,24 @@ class SelectServer(Daemon):
         # Part closing client from all channels
         self.channels.part_all(client_sock)
 
-        client_sock.close()
         self.clients.remove(client_sock)
+        client_sock.close()
+
 
     def close_server(self, server_sock):
-        pass  # TODO: implement
+        self.servers.remove(server_sock)
+        server_sock.close()
 
     def process_heartbleeds(self):
         self.check_heartbleed_responses(self.clients)
-        # TODO: check server responses
+        self.check_heartbleed_responses(self.servers)
 
         self.send_heartbleed_requests(self.clients)
-        # TODO: send server requests
+        self.send_heartbleed_requests(self.servers)
 
     def check_heartbleed_responses(self, conn_manager):
         # Check if previous HEART\m messages were answered
+        # TODO: close connections after this loop (or at least remove them from conn_manager after)
         for i in range(len(conn_manager.heartbleed_status)):
             if conn_manager.heartbleed_status[i] < 0:
                 conn_manager.heartbleed_status[i] = 0
