@@ -15,7 +15,7 @@ def hasEnoughArguments(command, required_n):
 class Client:
     BUFFER_SIZE = 1024
     
-    def __init__(self, nick, is_heartbleed_on):
+    def __init__(self, nick, is_heartbleed_on=False, prints_disabled=False):
         self.socket = None
         self.nick = nick
         self.rooms = []
@@ -24,7 +24,7 @@ class Client:
         self.heartbleed_interval = 2
         self.heartbleed_timer = Timer(6)
         
-        self.ui = FancyUI(nick)
+        self.ui = FancyUI(nick, prints_disabled)
         
     def isConnected(self):
         if (self.socket == None):
@@ -103,6 +103,7 @@ class Client:
         
     def sendMessage(self, room, message):
         if (not self.isConnected()):
+            self.ui.printString("There is no connection.")
             return
         if (not room in self.rooms):
             self.ui.printString("You don't belong to that room!")
@@ -111,6 +112,13 @@ class Client:
         
         message_format = "MSG" + " " + self.nick + " " + room + " " + message + "\n"
         self.socket.sendall(message_format.encode())
+        
+    """This method is for testing purposes."""
+    def sendAnything(self, payload):
+        if (not self.isConnected()):
+            self.ui.printString("There is no connection.")
+            return
+        self.socket.sendall(payload.encode())
         
     def changeNick(self, new_nick):
         if (len(new_nick) > 32):
@@ -124,6 +132,7 @@ class Client:
         
     def join(self, room):
         if (not self.isConnected()):
+            self.ui.printString("There is no connection.")
             return
         if (room in self.rooms):
             self.ui.printString("You are in that room already!")
@@ -135,6 +144,7 @@ class Client:
     
     def part(self, room):
         if (not self.isConnected()):
+            self.ui.printString("There is no connection.")
             return
         if (not room in self.rooms):
             self.ui.printString("You are not in that room yet!")
@@ -214,11 +224,14 @@ class Client:
         self.processInput()
 
 def main():
-    heartbleed_on = False
+    h = False
+    d = False
     if len(sys.argv) > 1:
         if "-h" in sys.argv:
-            heartbleed_on = True
-    client = Client("mChatter", heartbleed_on)
+            h = True
+        if "-d" in sys.argv:
+            d = True
+    client = Client("mChatter", is_heartbleed_on=h, prints_disabled=d)
     client.run()
 
 
