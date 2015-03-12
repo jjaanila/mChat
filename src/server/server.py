@@ -249,17 +249,17 @@ class SelectServer(Daemon):
         total_data = bytearray()
         while max_len > 0:
             try:
-                data = sock.recv(max_len)
+                data = sock.recv(1)
             except socket.error:
                 raise
             if data:
-                max_len -= len(data)
-                if b'\n' in data:
-                    total_data.extend(data[:data.find(b'\n')])
+                max_len -= 1
+                if data == b'\n':
                     break
                 total_data.extend(data)
             else:
                 raise socket.error
+
         return bytes(total_data)
 
     def close_client(self, client_sock):

@@ -56,6 +56,15 @@ class ConnectionManager():
         try:
             conn_index = self.sockets.index(sock)
             return self.listen_addrs[conn_index]
-        # Socket not in self.sockets. No need to do anything special.
+        # Socket not in self.sockets. Raise error
+        except ValueError:
+            raise
+
+    # Returns heartbleed_status of socket. Raises ValueError if socket not self.sockets
+    def get_heartbleed_status(self, sock):
+        try:
+            conn_index = self.sockets.index(sock)
+            return self.heartbleed_status[conn_index]
+        # Socket not in self.sockets. Raise error
         except ValueError:
             raise
