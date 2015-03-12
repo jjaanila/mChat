@@ -4,10 +4,11 @@ mChat client software.
 
 import sys, socket, threading, time
 from timer import Timer
+from fancyui import FancyUI
 
 def hasEnoughArguments(command, required_n):
         if (len(command) != required_n + 1):
-            print("This command requires " + str(required_n) + " argument(s)!")
+            self.ui.printString("This command requires " + str(required_n) + " argument(s)!")
             return False
         return True
 
@@ -23,9 +24,10 @@ class Client:
         self.heartbleed_interval = 2
         self.heartbleed_timer = Timer(6)
         
+        self.ui = FancyUI(nick)
+        
     def isConnected(self):
         if (self.socket == None):
-            print("There is no connection.")
             return False
         return True
     
@@ -43,14 +45,14 @@ class Client:
             protocol_msg = data.split(" ", 3)
 
             if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
-                print("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+                self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
             elif protocol_msg[0] == "HEART":
                 self.socket.sendall("BLEED\n".encode())
             elif protocol_msg[0] == "BLEED":
                 if self.heartbleed_on:
                     self.heartbleed_timer.start()
             else:
-                print("Unidentified message: " + data)#Debug
+                self.ui.printString("Unidentified message: " + data)#Debug
     
     def connect(self, ip, port):
         sock = None
@@ -64,13 +66,13 @@ class Client:
             try:
                 sock.connect(addr)
             except socket.error as e:
-                print("Failed to connect", ip, port, "due to", e)
+                self.ui.printString("Failed to connect " + ip + ":" + port + " due to " + str(e))
                 sock.close()
                 sock = None
                 continue
             break
         if (sock == None):
-            print("Connection failed")
+            self.ui.printString("Connection failed.")
             return
         self.socket = sock
         t = threading.Thread(target=self.receiveMessages)
@@ -79,45 +81,55 @@ class Client:
         if self.heartbleed_on:
             self.sendKeepAliveMessage()#Will continue sending in a separate thread.
             self.heartbleed_timer.start()
-        print("Connected to", ip, port)
+        self.ui.printString("Connected to " + ip + ":" + port)
         
     def disconnect(self):
         if (not self.isConnected()):
+            self.ui.printString("There is no connection.")
             return
-        self.rooms = []	
+        self.rooms = []
         self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
         self.socket = None
         self.heartbleed_timer.reset()
-        print("Disconnected")
+        self.ui.printString("Disconnected.")
+    
+    def quit(self):
+        if self.isConnected():
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
+        self.ui.printString("Goodbye!")
+        sys.exit()
         
     def sendMessage(self, room, message):
         if (not self.isConnected()):
             return
         if (not room in self.rooms):
-            print("You don't belong to that room!")
+            self.ui.printString("You don't belong to that room!")
             return
-        print("<" + room + "> " + self.nick + ": " + message)
+        self.ui.printString("<" + room + "> " + self.nick + ": " + message)
         
         message_format = "MSG" + " " + self.nick + " " + room + " " + message + "\n"
         self.socket.sendall(message_format.encode())
         
     def changeNick(self, new_nick):
         if (len(new_nick) > 32):
-            print("Too long nick!")
+            self.ui.printString("Too long nick!")
         elif (len(new_nick) == 0):
-            print("You did not give a proper nick.")
+            self.ui.printString("You did not give a proper nick.")
         else:
             self.nick = new_nick
+            self.ui.nick = new_nick
+            self.ui.printString("Nick changed to " + new_nick + ".")
         
     def join(self, room):
         if (not self.isConnected()):
             return
         if (room in self.rooms):
-            print("You are in that room already!")
+            self.ui.printString("You are in that room already!")
             return
         self.rooms.append(room)
-        print("Joined room", room)
+        self.ui.printString("Joined room " + room + ".")
         message_format = "JOIN" + " " + room + "\n"
         self.socket.sendall(message_format.encode())
     
@@ -125,10 +137,10 @@ class Client:
         if (not self.isConnected()):
             return
         if (not room in self.rooms):
-            print("You are not in that room yet!")
+            self.ui.printString("You are not in that room yet!")
             return
         self.rooms.remove(room)
-        print("Left room", room)
+        self.ui.printString("Left room " + room)
         message_format = "PART" + " " + room + "\n"
         self.socket.sendall(message_format.encode())
         
@@ -142,11 +154,11 @@ class Client:
     def checkTimers(self):
         if self.heartbleed_on:
             if (self.heartbleed_timer.hasExpired()):
-                print("Server lost! Disconnecting...")
+                self.ui.printString("Server lost! Disconnecting...")
                 self.disconnect()
         
     def printHelp(self):
-        print("""Commands:
+        self.ui.printString("""Commands:
 /connect <IP> <Port>
 /disconnect
 /join <room_name>
@@ -162,7 +174,7 @@ class Client:
             if (terminal_input.find("/") == 0):
                 command = terminal_input.split(" ", 2)
             else:
-                print("Invalid input. Commands should start with /")
+                self.ui.printString("Invalid input. Commands should start with /")
                 continue
             
             if (command[0] == "/connect"):
@@ -181,8 +193,7 @@ class Client:
                     self.part(command[1])
                     
             elif (command[0] == "/quit"):
-                self.disconnect()
-                sys.exit()
+                self.quit()
                 
             elif (command[0] == "/msg"):
                 if (hasEnoughArguments(command, 2)):
@@ -196,9 +207,10 @@ class Client:
                 self.printHelp()
                        
             else:
-                print("Unknown command.")
+                self.ui.printString("Unknown command.")
         
     def run(self):
+        self.ui.printString("Hi!\nmChat client at your service. Type /help for instructions.")
         self.processInput()
 
 def main():
@@ -206,7 +218,6 @@ def main():
     if len(sys.argv) > 1:
         if "-h" in sys.argv:
             heartbleed_on = True
-    print("mChat client at your service. Type /help for instructions.")
     client = Client("mChatter", heartbleed_on)
     client.run()
 
