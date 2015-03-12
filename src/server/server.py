@@ -86,10 +86,9 @@ class SelectServer(Daemon):
                         sockfd.close()
                         continue
 
+                # New server connection attempt
                 elif sock == self.server_listen_socket and self.candidate_server_socket == None:
                     sockfd, addr = self.server_listen_socket.accept()
-                    print("New server connection attempt, IP: %s" % addr[0])
-
                     try:
                         message = "ALL_ADDRS"
                         for address in self.servers.listen_addrs:
@@ -276,6 +275,7 @@ class SelectServer(Daemon):
 
 
     def close_server(self, server_sock):
+        print("Closed server connection, IP: %s, port: %s" % (self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
         self.servers.remove(server_sock)
         server_sock.close()
 
@@ -288,27 +288,34 @@ class SelectServer(Daemon):
 
     def check_heartbleed_responses(self, conn_manager):
         # Check if previous HEART\m messages were answered
-        # TODO: close connections after this loop (or at least remove them from conn_manager after)
+        dead_sockets = []
         for i in range(len(conn_manager.heartbleed_status)):
             if conn_manager.heartbleed_status[i] < 0:
                 conn_manager.heartbleed_status[i] = 0
             elif conn_manager.heartbleed_status[i] < SelectServer.MISSING_HEARTBLEEDS_ACCEPTED:
                 conn_manager.heartbleed_status[i] += 1
             else:
-                if conn_manager.type == ConnectionManager.TYPE_CLIENT:
-                    self.close_client(conn_manager.sockets[i])
-                elif conn_manager.type == ConnectionManager.TYPE_SERVER:
-                    self.close_server(conn_manager.sockets[i])
+                dead_sockets.append(conn_manager.sockets[i])
+
+        for sock in dead_sockets:
+            if conn_manager.type == ConnectionManager.TYPE_CLIENT:
+                self.close_client(sock)
+            elif conn_manager.type == ConnectionManager.TYPE_SERVER:
+                self.close_server(sock)
 
     def send_heartbleed_requests(self, conn_manager):
+        dead_sockets = []
         for sock in conn_manager.sockets:
             try:
                 sock.sendall("HEART\n".encode())
             except socket.error:
-                if conn_manager.type == ConnectionManager.TYPE_CLIENT:
-                    self.close_client(sock)
-                elif conn_manager.type == ConnectionManager.TYPE_SERVER:
-                    self.close_server(sock)
+                dead_sockets.append(sock)
+
+        for dead_sock in dead_sockets:
+            if conn_manager.type == ConnectionManager.TYPE_CLIENT:
+                self.close_client(dead_sock)
+            elif conn_manager.type == ConnectionManager.TYPE_SERVER:
+                self.close_server(dead_sock)
 
     # Return connected socket or None if unsuccessful
     def connect(self, ip, port):
