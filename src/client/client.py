@@ -35,7 +35,7 @@ class Client:
         if self.isConnected():
             try:
                 self.socket.sendall(string.encode())
-            except socket.error:
+            except socket.error as e:
                 self.ui.printString("Send error, " + str(e))
         else:
             self.ui.printString("There is no connection.")
@@ -52,8 +52,8 @@ class Client:
                     if self.socket == None:
                         return
                     data += self.socket.recv(Client.BUFFER_SIZE)
-                except socket.error:
-                    raise
+                except socket.error as e:
+                    self.ui.printString("Receive error." + str(e))
             data_u = data.decode()
             messages = data_u.split("\n", 1)
             data = messages[1].encode()
