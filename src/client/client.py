@@ -6,12 +6,6 @@ import sys, socket, threading, time
 from timer import Timer
 from fancyui import FancyUI
 
-def hasEnoughArguments(command, required_n):
-        if (len(command) != required_n + 1):
-            self.ui.printString("This command requires " + str(required_n) + " argument(s)!")
-            return False
-        return True
-
 class Client:
     BUFFER_SIZE = 1024
     
@@ -31,32 +25,58 @@ class Client:
             return False
         return True
     
-    def receiveMessages(self):
-        while(self.socket != None):
-            data = ""
-            while(not '\n' in data):
+    def hasEnoughArguments(self, command, required_n):
+        if (len(command) != required_n + 1):
+            self.ui.printString("This command requires " + str(required_n) + " argument(s)!")
+            return False
+        return True
+    
+    def sendString(self, string):
+        if self.isConnected():
+            try:
+                self.socket.sendall(string.encode())
+            except socket.error:
+                self.ui.printString("Send error, " + str(e))
+        else:
+            self.ui.printString("There is no connection.")
+    
+    def receiveMessagesAndCheckTimers(self):
+        data = b""
+        while(self.isConnected):
+            while(b'\n' not in data):
                 time.sleep(0.1)
-                self.checkTimers()#Just put this somewhere.
-                if self.socket == None:
-                    return
-                data += self.socket.recv(Client.BUFFER_SIZE).decode()
+                self.checkTimers()
+                if len(data) > Client.BUFFER_SIZE:
+                    data = b""
+                try:
+                    if self.socket == None:
+                        return
+                    data += self.socket.recv(Client.BUFFER_SIZE)
+                except socket.error:
+                    raise
+            data_u = data.decode()
+            messages = data_u.split("\n", 1)
+            data = messages[1].encode()
+            protocol_msg = messages[0].split(" ", 3)
             
-            data = data.rstrip('\n')
-            protocol_msg = data.split(" ", 3)
-
             if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
                 self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
             elif protocol_msg[0] == "HEART":
-                self.socket.sendall("BLEED\n".encode())
+                self.sendString("BLEED\n")
             elif protocol_msg[0] == "BLEED":
                 if self.heartbleed_on:
                     self.heartbleed_timer.start()
             else:
-                self.ui.printString("Unidentified message: " + data)#Debug
+                self.ui.printString("Unidentified message: " + messages[0])
     
     def connect(self, ip, port):
         sock = None
-        for result in socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
+        try:
+            addr_info = socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        except socket.error as e:
+            self.ui.printString("Failed to connect to " + ip + ":" + port + " due to " + str(e))
+            return
+        for result in addr_info:
             family, socktype, proto, _, addr = result
             try:
                 sock = socket.socket(family, socktype, proto)
@@ -66,7 +86,7 @@ class Client:
             try:
                 sock.connect(addr)
             except socket.error as e:
-                self.ui.printString("Failed to connect " + ip + ":" + port + " due to " + str(e))
+                self.ui.printString("Failed to connect to " + ip + ":" + port + " due to " + str(e))
                 sock.close()
                 sock = None
                 continue
@@ -75,7 +95,7 @@ class Client:
             self.ui.printString("Connection failed.")
             return
         self.socket = sock
-        t = threading.Thread(target=self.receiveMessages)
+        t = threading.Thread(target=self.receiveMessagesAndCheckTimers)
         t.daemon = True
         t.start()
         if self.heartbleed_on:
@@ -88,8 +108,11 @@ class Client:
             self.ui.printString("There is no connection.")
             return
         self.rooms = []
-        self.socket.shutdown(socket.SHUT_RDWR)
-        self.socket.close()
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
+        except socket.error:
+            pass
         self.socket = None
         self.heartbleed_timer.reset()
         self.ui.printString("Disconnected.")
@@ -111,14 +134,10 @@ class Client:
         self.ui.printString("<" + room + "> " + self.nick + ": " + message)
         
         message_format = "MSG" + " " + self.nick + " " + room + " " + message + "\n"
-        self.socket.sendall(message_format.encode())
-        
-    """This method is for testing purposes."""
-    def sendAnything(self, payload):
-        if (not self.isConnected()):
-            self.ui.printString("There is no connection.")
-            return
-        self.socket.sendall(payload.encode())
+        try:
+            self.sendString(message_format)
+        except socket.error as e:
+            self.ui.printString("Send error." + str(e))
         
     def changeNick(self, new_nick):
         if (len(new_nick) > 32):
@@ -140,7 +159,7 @@ class Client:
         self.rooms.append(room)
         self.ui.printString("Joined room " + room + ".")
         message_format = "JOIN" + " " + room + "\n"
-        self.socket.sendall(message_format.encode())
+        self.sendString(message_format)
     
     def part(self, room):
         if (not self.isConnected()):
@@ -150,13 +169,13 @@ class Client:
             self.ui.printString("You are not in that room yet!")
             return
         self.rooms.remove(room)
-        self.ui.printString("Left room " + room)
+        self.ui.printString("Left room " + room + ".")
         message_format = "PART" + " " + room + "\n"
-        self.socket.sendall(message_format.encode())
+        self.sendString(message_format)
         
     def sendKeepAliveMessage(self):
         if self.socket != None:
-            self.socket.sendall("HEART\n".encode())
+            self.sendString("HEART\n")
             thread = threading.Timer(self.heartbleed_interval, self.sendKeepAliveMessage)
             thread.daemon = True # the main thread won't wait for this thread after exiting
             thread.start()
@@ -188,29 +207,29 @@ class Client:
                 continue
             
             if (command[0] == "/connect"):
-                if (hasEnoughArguments(command, 2)):
+                if (self.hasEnoughArguments(command, 2)):
                     self.connect(command[1], command[2])
                     
             elif (command[0] == "/disconnect"):
                 self.disconnect()
                 
             elif (command[0] == "/join"):
-                if (hasEnoughArguments(command, 1)):
+                if (self.hasEnoughArguments(command, 1)):
                     self.join(command[1])
                            
             elif (command[0] == "/part"):
-                if (hasEnoughArguments(command, 1)):
+                if (self.hasEnoughArguments(command, 1)):
                     self.part(command[1])
                     
             elif (command[0] == "/quit"):
                 self.quit()
                 
             elif (command[0] == "/msg"):
-                if (hasEnoughArguments(command, 2)):
+                if (self.hasEnoughArguments(command, 2)):
                     self.sendMessage(command[1], command[2])
                     
             elif (command[0] == "/nick"):
-                if (hasEnoughArguments(command, 1)):
+                if (self.hasEnoughArguments(command, 1)):
                     self.changeNick(command[1])
                     
             elif (command[0] == "/help"):
