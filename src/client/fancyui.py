@@ -1,4 +1,5 @@
 import os
+import sys
 
 class FancyUI:
     MAX_N_HISTORY_RECORDS = 500
@@ -20,5 +21,5 @@ class FancyUI:
             os.system("clear")
         for record in self.history:
             print(record)
-        print(self.nick + ": ", end="", flush=True)
-        
+        print(self.nick + ": ", end="")
+        sys.stdout.flush()

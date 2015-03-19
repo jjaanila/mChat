@@ -101,7 +101,7 @@ class Client:
         if self.heartbleed_on:
             self.sendKeepAliveMessage()#Will continue sending in a separate thread.
             self.heartbleed_timer.start()
-        self.ui.printString("Connected to " + ip + ":" + port)
+        self.ui.printString("Connected to " + ip + ":" + str(port))
         
     def disconnect(self):
         if (not self.isConnected()):
