@@ -74,7 +74,7 @@ class Client:
         try:
             addr_info = socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
         except socket.error as e:
-            self.ui.printString("Failed to connect to " + ip + ":" + port + " due to " + str(e))
+            self.ui.printString("Failed to connect to " + ip + ":" + str(port) + " due to " + str(e))
             return
         for result in addr_info:
             family, socktype, proto, _, addr = result
@@ -86,7 +86,7 @@ class Client:
             try:
                 sock.connect(addr)
             except socket.error as e:
-                self.ui.printString("Failed to connect to " + ip + ":" + port + " due to " + str(e))
+                self.ui.printString("Failed to connect to " + ip + ":" + str(port) + " due to " + str(e))
                 sock.close()
                 sock = None
                 continue
