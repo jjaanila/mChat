@@ -1,5 +1,6 @@
 import socket
 import select
+import logging
 from daemon import Daemon
 from channelmanager import ChannelManager
 from channelmanager import ChannelJoinError
@@ -35,6 +36,9 @@ class SelectServer(Daemon):
         self.heartbleed_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
         self.candidate_server_socket = None
         super(SelectServer, self).__init__(pidfile)
+        
+        self.log_file = "server.log"
+        logging.basicConfig(filename=self.log_file, format='%(asctime)s %(message)s ', datefmt='%I:%M:%S', level=logging.DEBUG)
 
     def run(self):
         # Lets give new servers heartbleed interval amount of time to connect
@@ -45,6 +49,7 @@ class SelectServer(Daemon):
         self.server_listen_socket = self.create_listen_socket(self.ip, self.server_listen_port)
 
         print("Server started on port " + str(self.client_listen_port))
+        logging.info("Server started on port: {}".format(self.client_listen_port))
         self.heartbleed_timer.start()
 
         while True:
@@ -78,11 +83,13 @@ class SelectServer(Daemon):
                         # Tell about the new connection to server admin and other clients
                         print("Client connected, IP: %s, port: %s" % (addr[0], addr[1]))
                         self.broadcast_clients(str.encode("Client connected, IP: %s, port: %s\n" % (addr[0], addr[1])), [sockfd])
+                        logging.info("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
                     except ConnectionAddError:
                         """
                         TODO: Tell client that server is full. Our protocol doesn't define how to do this so let's
                               just rudely close the connection and continue.
                         """
+                        logging.exception("Connection from client IP: {}, port: {} refused.".format(addr[0], addr[1]))
                         sockfd.close()
                         continue
 
@@ -116,6 +123,7 @@ class SelectServer(Daemon):
                         if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
                             self.servers.add(sock, (protocol_msg[1], int(protocol_msg[2])))
                             print("Server connected, IP: %s, server listen port: %s" % (protocol_msg[1], protocol_msg[2]))
+                            logging.info("Server connected, IP: {}, port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.candidate_server_socket = None
                             candidate_server_timer.reset()
                     except socket.error:
@@ -131,6 +139,7 @@ class SelectServer(Daemon):
                         """
                         sock.close()
                         self.candidate_server_socket = None
+                        logging.exception("Connection from candidate server refused.")
                         continue
 
 
@@ -171,6 +180,8 @@ class SelectServer(Daemon):
                         TODO: Here we should tell the client that joining channel was not successful.
                               The protocol doesn't support this yet, so let's just continue.
                         """
+                        addr = sock.getpeername()
+                        logging.exception("Client {} {} couldn't join channel {}.".format(addr[0], addr[1], protocol_msg[1]))
                         continue
 
                 elif sock in self.servers.sockets:
@@ -269,13 +280,14 @@ class SelectServer(Daemon):
 
         # Part closing client from all channels
         self.channels.part_all(client_sock)
-
+        logging.info("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
         self.clients.remove(client_sock)
         client_sock.close()
 
 
     def close_server(self, server_sock):
         print("Closed server connection, IP: %s, port: %s" % (self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
+        logging.info("Closed server connection, IP: {}, port: {}".format(self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
         self.servers.remove(server_sock)
         server_sock.close()
 
