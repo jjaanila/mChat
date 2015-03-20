@@ -188,58 +188,54 @@ class Client:
         
     def printHelp(self):
         self.ui.printString("""Commands:
-/connect <IP> <Port>
-/disconnect
-/join <room_name>
-/part <room_name>
-/quit
-/msg <room_name> <message>
-/nick <new_nick>
-/help""")
+connect <IP> <Port>
+disconnect
+join <room_name>
+part <room_name>
+quit
+msg <room_name> <message>
+nick <new_nick>
+help""")
 
     def processInput(self):
         while(True):
             terminal_input = input("")
-            if (terminal_input.find("/") == 0):
-                command = terminal_input.split(" ", 2)
-            else:
-                self.ui.printString("Invalid input. Commands should start with /")
-                continue
+            command = terminal_input.split(" ", 2)
             
-            if (command[0] == "/connect"):
+            if (command[0] == "connect"):
                 if (self.hasEnoughArguments(command, 2)):
                     self.connect(command[1], command[2])
                     
-            elif (command[0] == "/disconnect"):
+            elif (command[0] == "disconnect"):
                 self.disconnect()
                 
-            elif (command[0] == "/join"):
+            elif (command[0] == "join"):
                 if (self.hasEnoughArguments(command, 1)):
                     self.join(command[1])
                            
-            elif (command[0] == "/part"):
+            elif (command[0] == "part"):
                 if (self.hasEnoughArguments(command, 1)):
                     self.part(command[1])
                     
-            elif (command[0] == "/quit"):
+            elif (command[0] == "quit"):
                 self.quit()
                 
-            elif (command[0] == "/msg"):
+            elif (command[0] == "msg"):
                 if (self.hasEnoughArguments(command, 2)):
                     self.sendMessage(command[1], command[2])
                     
-            elif (command[0] == "/nick"):
+            elif (command[0] == "nick"):
                 if (self.hasEnoughArguments(command, 1)):
                     self.changeNick(command[1])
                     
-            elif (command[0] == "/help"):
+            elif (command[0] == "help"):
                 self.printHelp()
                        
             else:
                 self.ui.printString("Unknown command.")
         
     def run(self):
-        self.ui.printString("Hi!\nmChat client at your service. Type /help for instructions.")
+        self.ui.printString("Hi!\nmChat client at your service. Type help for instructions.")
         self.processInput()
 
 def main():
