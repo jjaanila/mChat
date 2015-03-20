@@ -82,7 +82,7 @@ class SelectServer(Daemon):
                         self.clients.add(sockfd)
                         # Tell about the new connection to server admin and other clients
                         print("Client connected, IP: %s, port: %s" % (addr[0], addr[1]))
-                        self.broadcast_clients(str.encode("Client connected, IP: %s, port: %s\n" % (addr[0], addr[1])), [sockfd])
+                        # self.broadcast_clients(str.encode("Client connected, IP: %s, port: %s\n" % (addr[0], addr[1])), [sockfd])
                         logging.info("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
                     except ConnectionAddError:
                         """
@@ -276,7 +276,7 @@ class SelectServer(Daemon):
     def close_client(self, client_sock):
         client_name = client_sock.getpeername()
         print("Client offline, IP: %s, port: %s" % (client_name[0], client_name[1]))
-        self.broadcast_clients(str.encode("Client offline, IP: %s, port: %s\n" % (client_name[0], client_name[1])), [client_sock])
+        # self.broadcast_clients(str.encode("Client offline, IP: %s, port: %s\n" % (client_name[0], client_name[1])), [client_sock])
 
         # Part closing client from all channels
         self.channels.part_all(client_sock)
