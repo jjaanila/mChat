@@ -8,6 +8,9 @@ from fancyui import FancyUI
 
 class Client:
     BUFFER_SIZE = 1024
+    MAX_NICK_LEN = 16
+    MAX_ROOM_LEN = 16
+    MAX_MSG_LEN_BYTES = 889 #1024 - len(MSG) - MAX_NICK_LEN - MAX_ROOM_LEN - SPACES * 3 - \n
     
     def __init__(self, nick, is_heartbleed_on=False, prints_disabled=False):
         self.socket = None
@@ -131,17 +134,21 @@ class Client:
         if (not room in self.rooms):
             self.ui.printString("You don't belong to that room!")
             return
-        self.ui.printString("<" + room + "> " + self.nick + ": " + message)
-        
-        message_format = "MSG" + " " + self.nick + " " + room + " " + message + "\n"
-        try:
-            self.sendString(message_format)
-        except socket.error as e:
-            self.ui.printString("Send error." + str(e))
+        rng = range(0, len(message), Client.MAX_MSG_LEN_BYTES)
+        message_split = [message[i:i + Client.MAX_MSG_LEN_BYTES] for i in rng]
+
+        for message_part in message_split:
+            self.ui.printString("<" + room + "> " + self.nick + ": " + message_part)
+            message_format = "MSG" + " " + self.nick + " " + room + " " + message_part + "\n"
+            try:
+                self.sendString(message_format)
+            except socket.error as e:
+                self.ui.printString("Send error." + str(e))
+                return
         
     def changeNick(self, new_nick):
-        if (len(new_nick) > 32):
-            self.ui.printString("Too long nick!")
+        if (len(new_nick) > Client.MAX_NICK_LEN):
+            self.ui.printString("Too long nick! (Max {})".format(Client.MAX_NICK_LEN))
         elif (len(new_nick) == 0):
             self.ui.printString("You did not give a proper nick.")
         else:
@@ -155,6 +162,9 @@ class Client:
             return
         if (room in self.rooms):
             self.ui.printString("You are in that room already!")
+            return
+        if len(room) > Client.MAX_ROOM_LEN:
+            self.ui.printString("Too long room name.(Max {})".format(Client.MAX_ROOM_LEN))
             return
         self.rooms.append(room)
         self.ui.printString("Joined room " + room + ".")
