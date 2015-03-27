@@ -1,8 +1,8 @@
 import socket
+import sys
 import select
 import logging
-import sys
-
+from logging.handlers import RotatingFileHandler
 from daemon import Daemon
 from channelmanager import ChannelManager
 from channelmanager import ChannelJoinError
@@ -38,12 +38,14 @@ class SelectServer(Daemon):
         self.client_listen_socket = None
         self.heartbleed_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
         self.candidate_server_socket = None
+        self.logger = None
+
         super(SelectServer, self).__init__(pidfile)
-        
-        self.log_file = "server.log"
-        logging.basicConfig(filename=self.log_file, format='%(asctime)s %(message)s ', datefmt='%I:%M:%S', level=logging.DEBUG)
+
 
     def run(self):
+        self.logger = self.logger_setup()
+
         # Lets give new servers heartbleed interval amount of time to connect
         candidate_server_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
 
@@ -54,7 +56,8 @@ class SelectServer(Daemon):
             sys.exit("Failed to open listen sockets to given hostname and port combination.")
 
         print("Server started on port " + str(self.client_listen_port))
-        logging.info("Server started on port: {}".format(self.client_listen_port))
+        self.logger.info("Server started on port: {}".format(self.client_listen_port))
+
         self.heartbleed_timer.start()
 
         while True:
@@ -87,14 +90,13 @@ class SelectServer(Daemon):
                         self.clients.add(sockfd)
                         # Tell about the new connection to server admin and other clients
                         print("Client connected, IP: %s, port: %s" % (addr[0], addr[1]))
-                        # self.broadcast_clients(str.encode("Client connected, IP: %s, port: %s\n" % (addr[0], addr[1])), [sockfd])
-                        logging.info("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
+                        self.logger.info("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
                     except ConnectionAddError:
                         """
                         TODO: Tell client that server is full. Our protocol doesn't define how to do this so let's
                               just rudely close the connection and continue.
                         """
-                        logging.exception("Connection from client IP: {}, port: {} refused.".format(addr[0], addr[1]))
+                        self.logger.exception("Connection from client IP: {}, port: {} refused.".format(addr[0], addr[1]))
                         sockfd.close()
                         continue
 
@@ -128,7 +130,7 @@ class SelectServer(Daemon):
                         if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
                             self.servers.add(sock, (protocol_msg[1], int(protocol_msg[2])))
                             print("Server connected, IP: %s, server listen port: %s" % (protocol_msg[1], protocol_msg[2]))
-                            logging.info("Server connected, IP: {}, port: {}".format(protocol_msg[1], protocol_msg[2]))
+                            self.logger.info("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.candidate_server_socket = None
                             candidate_server_timer.reset()
                     except socket.error:
@@ -144,7 +146,7 @@ class SelectServer(Daemon):
                         """
                         sock.close()
                         self.candidate_server_socket = None
-                        logging.exception("Connection from candidate server refused.")
+                        self.logger.exception("Connection from candidate server refused.")
                         continue
 
 
@@ -186,7 +188,7 @@ class SelectServer(Daemon):
                               The protocol doesn't support this yet, so let's just continue.
                         """
                         addr = sock.getpeername()
-                        logging.exception("Client {} {} couldn't join channel {}.".format(addr[0], addr[1], protocol_msg[1]))
+                        self.logger.exception("Client {} {} couldn't join channel {}.".format(addr[0], addr[1], protocol_msg[1]))
                         continue
 
                 elif sock in self.servers.sockets:
@@ -281,18 +283,19 @@ class SelectServer(Daemon):
     def close_client(self, client_sock):
         client_name = client_sock.getpeername()
         print("Client offline, IP: %s, port: %s" % (client_name[0], client_name[1]))
-        # self.broadcast_clients(str.encode("Client offline, IP: %s, port: %s\n" % (client_name[0], client_name[1])), [client_sock])
+        self.logger.info("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
 
         # Part closing client from all channels
         self.channels.part_all(client_sock)
-        logging.info("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
+
         self.clients.remove(client_sock)
         client_sock.close()
 
 
     def close_server(self, server_sock):
         print("Closed server connection, IP: %s, port: %s" % (self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
-        logging.info("Closed server connection, IP: {}, port: {}".format(self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
+        self.logger.info("Closed server connection, IP: {}, port: {}".format(self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
+
         self.servers.remove(server_sock)
         server_sock.close()
 
@@ -394,3 +397,14 @@ class SelectServer(Daemon):
                 continue
             break
         return sock
+
+    def logger_setup(self):
+        log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
+        log_file = self.ip + str(self.client_listen_port) + "server.log"
+        my_handler = RotatingFileHandler(log_file, mode='a', maxBytes=5*1024*1024, backupCount=1, encoding=None, delay=0)
+        my_handler.setFormatter(log_formatter)
+        my_handler.setLevel(logging.INFO)
+        app_log = logging.getLogger("Rotating Logger")
+        app_log.setLevel(logging.INFO)
+        app_log.addHandler(my_handler)
+        return app_log
