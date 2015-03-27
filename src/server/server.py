@@ -1,12 +1,15 @@
 import socket
 import select
 import logging
+import sys
+
 from daemon import Daemon
 from channelmanager import ChannelManager
 from channelmanager import ChannelJoinError
 from connectionmanager import ConnectionManager
 from connectionmanager import ConnectionAddError
 from timer import Timer
+
 
 
 class SelectServer(Daemon):
@@ -47,6 +50,8 @@ class SelectServer(Daemon):
         # Listen socket for accepting incoming connections
         self.client_listen_socket = self.create_listen_socket(self.ip, self.client_listen_port)
         self.server_listen_socket = self.create_listen_socket(self.ip, self.server_listen_port)
+        if self.client_listen_socket == None or self.server_listen_socket == None:
+            sys.exit("Failed to open listen sockets to given hostname and port combination.")
 
         print("Server started on port " + str(self.client_listen_port))
         logging.info("Server started on port: {}".format(self.client_listen_port))
@@ -362,9 +367,30 @@ class SelectServer(Daemon):
                 continue
         self.not_connected_servers = []
 
+    # Return created listen socket or None if unsuccessful
     def create_listen_socket(self, ip, port):
-        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind((ip, port))
-        sock.listen(128)  # parameter value = maximum number of queued connections
+        sock = None
+
+        try:
+            addrinfo = socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        except socket.error:
+            return None
+
+        for result in addrinfo:
+            family, socktype, proto, _, addr = result
+            try:
+                sock = socket.socket(family, socktype, proto)
+            except socket.error:
+                sock = None
+                continue
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(addr)
+                sock.listen(128)  # parameter value = maximum number of queued connections
+            except socket.error as e:
+                print("Failed to connect", ip, port, "due to", e)
+                sock.close()
+                sock = None
+                continue
+            break
         return sock
