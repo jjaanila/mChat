@@ -89,7 +89,7 @@ class SelectServer(Daemon):
                     try:
                         self.clients.add(sockfd)
                         # Tell about the new connection to server admin and other clients
-                        print("Client connected, IP: %s, port: %s" % (addr[0], addr[1]))
+                        print("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
                         self.logger.info("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
                     except ConnectionAddError:
                         """
@@ -129,7 +129,7 @@ class SelectServer(Daemon):
                         protocol_msg = message.split(" ")
                         if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
                             self.servers.add(sock, (protocol_msg[1], int(protocol_msg[2])))
-                            print("Server connected, IP: %s, server listen port: %s" % (protocol_msg[1], protocol_msg[2]))
+                            print("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.logger.info("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.candidate_server_socket = None
                             candidate_server_timer.reset()
@@ -187,8 +187,11 @@ class SelectServer(Daemon):
                         TODO: Here we should tell the client that joining channel was not successful.
                               The protocol doesn't support this yet, so let's just continue.
                         """
-                        addr = sock.getpeername()
-                        self.logger.exception("Client {} {} couldn't join channel {}.".format(addr[0], addr[1], protocol_msg[1]))
+                        try:
+                            addr = sock.getpeername()
+                            self.logger.exception("Client {} {} couldn't join channel {}.".format(addr[0], addr[1], protocol_msg[1]))
+                        except socket.error:
+                            self.logger.exception("Client couldn't join channel {}. Failed to fetch address of the client".format(protocol_msg[1]))
                         continue
 
                 elif sock in self.servers.sockets:
@@ -281,9 +284,13 @@ class SelectServer(Daemon):
         return bytes(total_data)
 
     def close_client(self, client_sock):
-        client_name = client_sock.getpeername()
-        print("Client offline, IP: %s, port: %s" % (client_name[0], client_name[1]))
-        self.logger.info("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
+        try:
+            client_name = client_sock.getpeername()
+            print("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
+            self.logger.info("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
+        except socket.error:
+            print("Client offline, failed to fetch IP and port of the client")
+            self.logger.info("Client offline, failed to fetch IP and port of the client")
 
         # Part closing client from all channels
         self.channels.part_all(client_sock)
@@ -293,7 +300,7 @@ class SelectServer(Daemon):
 
 
     def close_server(self, server_sock):
-        print("Closed server connection, IP: %s, port: %s" % (self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
+        print("Closed server connection, IP: {}, port: {}".format(self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
         self.logger.info("Closed server connection, IP: {}, port: {}".format(self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
 
         self.servers.remove(server_sock)
@@ -340,7 +347,13 @@ class SelectServer(Daemon):
     # Return connected socket or None if unsuccessful
     def connect(self, ip, port):
         sock = None
-        for result in socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM):
+
+        try:
+            addrinfo = socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        except socket.error:
+            return None
+
+        for result in addrinfo:
             family, socktype, proto, _, addr = result
             try:
                 sock = socket.socket(family, socktype, proto)
