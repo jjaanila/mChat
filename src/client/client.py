@@ -2,9 +2,10 @@
 mChat client software.
 """
 
-import sys, socket, threading, time
+import sys, socket, threading, time, hashlib
 from timer import Timer
 from fancyui import FancyUI
+from rooms import Room, PrivateRoom
 
 class Client:
     BUFFER_SIZE = 1024
@@ -16,7 +17,7 @@ class Client:
         self.socket = None
         self.nick = nick
         self.rooms = []
-        
+
         self.heartbleed_on = is_heartbleed_on
         self.heartbleed_interval = 2
         self.heartbleed_timer = Timer(6)
@@ -42,6 +43,14 @@ class Client:
                 self.ui.printString("Send error, " + str(e))
         else:
             self.ui.printString("There is no connection.")
+            
+    def getRoom(self, room_name):
+        for room in self.rooms:
+            if room.name == room_name:
+                return room
+            if room.getRoomNetworkName() == room_name:
+                return room
+        return None
     
     def receiveMessagesAndCheckTimers(self):
         data = b""
@@ -63,7 +72,12 @@ class Client:
             protocol_msg = messages[0].split(" ", 3)
             
             if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
-                self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+                room = self.getRoom(protocol_msg[2])
+                if room != None:
+                    self.ui.printString("<" + room.name + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+                else:
+                    #Message from a room the client does not belong to.
+                    self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
             elif protocol_msg[0] == "HEART":
                 self.sendString("BLEED\n")
             elif protocol_msg[0] == "BLEED":
@@ -127,19 +141,20 @@ class Client:
         self.ui.printString("Goodbye!")
         sys.exit()
         
-    def sendMessage(self, room, message):
+    def sendMessage(self, room_name, message):
         if (not self.isConnected()):
             self.ui.printString("There is no connection.")
             return
-        if (not room in self.rooms):
+        room = self.getRoom(room_name)
+        if (room == None):
             self.ui.printString("You don't belong to that room!")
             return
         rng = range(0, len(message), Client.MAX_MSG_LEN_BYTES)
         message_split = [message[i:i + Client.MAX_MSG_LEN_BYTES] for i in rng]
 
         for message_part in message_split:
-            self.ui.printString("<" + room + "> " + self.nick + ": " + message_part)
-            message_format = "MSG" + " " + self.nick + " " + room + " " + message_part + "\n"
+            self.ui.printString("<" + room.name + "> " + self.nick + ": " + message_part)
+            message_format = "MSG" + " " + self.nick + " " + room.getRoomNetworkName() + " " + message_part + "\n"
             try:
                 self.sendString(message_format)
             except socket.error as e:
@@ -156,31 +171,37 @@ class Client:
             self.ui.nick = new_nick
             self.ui.printString("Nick changed to " + new_nick + ".")
         
-    def join(self, room):
+    def join(self, room_name, password=None):
         if (not self.isConnected()):
             self.ui.printString("There is no connection.")
             return
-        if (room in self.rooms):
+        if (self.getRoom(room_name) != None):
             self.ui.printString("You are in that room already!")
             return
-        if len(room) > Client.MAX_ROOM_LEN:
+        if len(room_name) > Client.MAX_ROOM_LEN:
             self.ui.printString("Too long room name.(Max {})".format(Client.MAX_ROOM_LEN))
             return
-        self.rooms.append(room)
-        self.ui.printString("Joined room " + room + ".")
-        message_format = "JOIN" + " " + room + "\n"
+        
+        if password != None:
+            self.rooms.append(PrivateRoom(room_name, password))
+        else:
+            self.rooms.append(Room(room_name))
+            
+        message_format = "JOIN" + " " + self.rooms[-1].getRoomNetworkName() + "\n"      
+        self.ui.printString("Joined room " + room_name + ".")
         self.sendString(message_format)
     
-    def part(self, room):
+    def part(self, room_name):
         if (not self.isConnected()):
             self.ui.printString("There is no connection.")
             return
-        if (not room in self.rooms):
+        room = self.getRoom(room_name)
+        if (room == None):
             self.ui.printString("You are not in that room yet!")
             return
+        message_format = "PART" + " " + room.getRoomNetworkName() + "\n"
+        self.ui.printString("Left room " + room.name + ".")
         self.rooms.remove(room)
-        self.ui.printString("Left room " + room + ".")
-        message_format = "PART" + " " + room + "\n"
         self.sendString(message_format)
         
     def sendKeepAliveMessage(self):
@@ -201,6 +222,7 @@ class Client:
 connect <IP> <Port>
 disconnect
 join <room_name>
+joinprivate <room_name> <password>
 part <room_name>
 quit
 msg <room_name> <message>
@@ -222,6 +244,10 @@ help""")
             elif (command[0] == "join"):
                 if (self.hasEnoughArguments(command, 1)):
                     self.join(command[1])
+            
+            elif (command[0] == "joinprivate"):
+                if (self.hasEnoughArguments(command, 2)):
+                    self.join(command[1], command[2])
                            
             elif (command[0] == "part"):
                 if (self.hasEnoughArguments(command, 1)):
