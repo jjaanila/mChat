@@ -2,7 +2,7 @@
 mChat client software.
 """
 
-import sys, socket, threading, time, hashlib
+import sys, socket, threading, time
 from timer import Timer
 from fancyui import FancyUI
 from rooms import Room, PrivateRoom
