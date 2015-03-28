@@ -2,6 +2,7 @@ import socket
 import sys
 import select
 import logging
+import signal
 from logging.handlers import RotatingFileHandler
 from daemon import Daemon
 from channelmanager import ChannelManager
@@ -38,14 +39,25 @@ class SelectServer(Daemon):
         self.client_listen_socket = None
         self.heartbleed_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
         self.candidate_server_socket = None
-        self.logger = None
-
-        super(SelectServer, self).__init__(pidfile)
-
-
-    def run(self):
         self.logger = self.logger_setup()
 
+        super(SelectServer, self).__init__(pidfile)
+        
+    def run(self):
+        try:
+            self.start_server()
+        except (KeyboardInterrupt, SystemExit):
+            self.logger.info("Server stopped.")
+        except Exception as e:
+            self.logger.exception("Uncaught exception: ")
+            print("Server shut down due to:", e)
+        finally:
+            print("Server stopped.")
+
+    def start_server(self):
+        #Set signal handlers.
+        signal.signal(signal.SIGTERM, self.sigterm_handler)
+        
         # Lets give new servers heartbleed interval amount of time to connect
         candidate_server_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
 
@@ -410,6 +422,9 @@ class SelectServer(Daemon):
                 continue
             break
         return sock
+    
+    def sigterm_handler(self, _signo, _stack_frame):
+        raise SystemExit
 
     def logger_setup(self):
         log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')

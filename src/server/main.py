@@ -13,9 +13,11 @@ def main():
         if 'start' == sys.argv[1]:
             server = SelectServer(pidfile, sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
             server.start()
+            print("Server started.")
         elif 'restart' == sys.argv[1]:
             server = SelectServer(pidfile, sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
             server.restart()
+            print("Server restarted.")
         else:
             print_instructions(sys.argv[0])
             sys.exit(2)
@@ -25,6 +27,7 @@ def main():
         if 'stop' == sys.argv[1]:
             server = SelectServer(pidfile, "", 0, 0)  # only pidfile has to be correct here
             server.stop()
+            print("Server stopped.")
         else:
             print_instructions(sys.argv[0])
             sys.exit(2)
