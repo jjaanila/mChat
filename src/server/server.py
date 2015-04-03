@@ -417,7 +417,7 @@ class SelectServer(Daemon):
                 sock.bind(addr)
                 sock.listen(128)  # parameter value = maximum number of queued connections
             except socket.error as e:
-                print("Failed to connect", ip, port, "due to", e)
+                print("Failed to connect", addr[0], ":", addr[1], "due to", e)
                 sock.close()
                 sock = None
                 continue

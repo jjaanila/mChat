@@ -87,6 +87,9 @@ class Client:
                 self.ui.printString("Unidentified message: " + messages[0])
     
     def connect(self, ip, port):
+        if (self.isConnected()):
+            self.ui.printString("There is a connection already. Disconnect before a new connection.")
+            return
         sock = None
         try:
             addr_info = socket.getaddrinfo(ip, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
@@ -103,7 +106,7 @@ class Client:
             try:
                 sock.connect(addr)
             except socket.error as e:
-                self.ui.printString("Failed to connect to " + ip + ":" + port + " due to " + str(e))
+                self.ui.printString("Failed to connect to " + addr[0] + ":" + str(addr[1]) + " due to " + str(e))
                 sock.close()
                 sock = None
                 continue
@@ -231,7 +234,11 @@ help""")
 
     def processInput(self):
         while(True):
-            terminal_input = input("")
+            try:
+                terminal_input = input("")
+            except (EOFError, KeyboardInterrupt) as e:
+                self.ui.printString("Stopping the client. {}".format(e))
+                break
             command = terminal_input.split(" ", 2)
             
             if (command[0] == "connect"):
@@ -273,6 +280,7 @@ help""")
     def run(self):
         self.ui.printString("Hi!\nmChat client at your service. Type help for instructions.")
         self.processInput()
+        self.quit()
 
 def main():
     h = False
