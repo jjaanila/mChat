@@ -67,8 +67,9 @@ class SelectServer(Daemon):
         if self.client_listen_socket == None or self.server_listen_socket == None:
             sys.exit("Failed to open listen sockets to given hostname and port combination.")
 
-        print("Server started on port " + str(self.client_listen_port))
-        self.logger.info("Server started on port: {}".format(self.client_listen_port))
+        start_msg = "Server started on '{}'. Client port: {}, Server port: {}".format(self.ip, self.client_listen_port, self.server_listen_port)
+        print(start_msg)
+        self.logger.info(start_msg)
 
         self.heartbleed_timer.start()
 
@@ -428,7 +429,7 @@ class SelectServer(Daemon):
 
     def logger_setup(self):
         log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
-        log_file = self.ip + str(self.client_listen_port) + "server.log"
+        log_file = self.ip + "_" + str(self.client_listen_port) + "_" + "server.log"
         my_handler = RotatingFileHandler(log_file, mode='a', maxBytes=5*1024*1024, backupCount=1, encoding=None, delay=0)
         my_handler.setFormatter(log_formatter)
         my_handler.setLevel(logging.INFO)

@@ -3,19 +3,41 @@ import sys
 
 
 def print_instructions(program_name):
-    print("usage: %s start <ip> <client_port> <server_port> | restart <ip> <client_port> <server_port> | stop" % program_name)
+    print("""usage: %s start [-d] <ip> <client_port> <server_port> [<remote_ip> <remote_port>]
+ | restart <ip> <client_port> <server_port>
+ | stop""" % program_name)
 
 
 def main():
     pidfile = "/tmp/select-server-daemon.pid"
 
-    if len(sys.argv) == 5:
+    try:
+        # raises ValueError if not present:
+        sys.argv.remove("-d")
+        daemon = True
+    except ValueError:
+        daemon = False
+
+    if len(sys.argv) == 5 or len(sys.argv) == 7:
+        ip = sys.argv[2]
+        client_port = int(sys.argv[3])
+        server_port = int(sys.argv[4])
+        remote_ip = None
+        remote_port = None
+        if len(sys.argv) == 7:
+            remote_ip = sys.argv[5]
+            remote_port = int(sys.argv[6])
+
         if 'start' == sys.argv[1]:
-            server = SelectServer(pidfile, sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
-            server.start()
+            server = SelectServer(pidfile, ip, client_port, server_port, remote_ip, remote_port)
+            if daemon:
+                server.start()
+            else:
+                server.run()
             print("Server started.")
         elif 'restart' == sys.argv[1]:
-            server = SelectServer(pidfile, sys.argv[2], int(sys.argv[3]), int(sys.argv[4]))
+            # NOTE: This might need some some rethinking when it comes to the parameters
+            server = SelectServer(pidfile, ip, client_port, server_port)
             server.restart()
             print("Server restarted.")
         else:
