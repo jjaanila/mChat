@@ -9,9 +9,9 @@ from rooms import Room, PrivateRoom
 
 class Client:
     BUFFER_SIZE = 1024
-    MAX_NICK_LEN = 16
-    MAX_ROOM_LEN = 16
-    MAX_MSG_LEN_BYTES = 889 #1024 - len(MSG) - MAX_NICK_LEN - MAX_ROOM_LEN - SPACES * 3 - \n
+    MAX_NICK_LEN = 32
+    MAX_ROOM_LEN = 64
+    MAX_MSG_LEN = 1024
     
     def __init__(self, nick, is_heartbleed_on=False, prints_disabled=False):
         self.socket = None
@@ -152,8 +152,9 @@ class Client:
         if (room == None):
             self.ui.printString("You don't belong to that room!")
             return
-        rng = range(0, len(message), Client.MAX_MSG_LEN_BYTES)
-        message_split = [message[i:i + Client.MAX_MSG_LEN_BYTES] for i in rng]
+        msg_space = Client.MAX_MSG_LEN - len(self.nick) - len(room.name) - 7 #Magic number: len(Tag + spaces + newline)
+        rng = range(0, len(message), msg_space)
+        message_split = [message[i:i + msg_space] for i in rng]
 
         for message_part in message_split:
             self.ui.printString("<" + room.name + "> " + self.nick + ": " + message_part)
