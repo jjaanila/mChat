@@ -15,6 +15,9 @@ from timer import Timer
 
 class SelectServer(Daemon):
     PROTOCOL_MSG_MAXLEN = 1024
+    NICKNAME_MAXLEN = 32
+    CHANNELNAME_MAXLEN = 64
+
     MAX_SERVERS = 1000
     MAX_CLIENTS = 10000
     MAX_CHANNELS = 30000
@@ -174,18 +177,29 @@ class SelectServer(Daemon):
                                 self.clients.set_heartbleed_received(sock)
                             elif protocol_msg[0] == "HEART":
                                 sock.sendall("BLEED\n".encode())
+
                         elif len(protocol_msg) == 2:
+                            # If len(protocol_msg) is 2, it is either JOIN or PART. Then protocol_msg[1] must be
+                            # name of the channel which must be shorter than CHANNELNAME_MAXLEN
+                            if len(protocol_msg[1]) > SelectServer.CHANNELNAME_MAXLEN:
+                                continue
+
                             if protocol_msg[0] == "JOIN":
                                 self.channels.join(sock, protocol_msg[1])
                             elif protocol_msg[0] == "PART":
                                 self.channels.part(sock, protocol_msg[1])
+
                         elif len(protocol_msg) == 4:
                             if protocol_msg[0] == "MSG":
-                                # Limit so that MSG can only be sent if joined the channel first
-                                if sock in self.channels.get(protocol_msg[2]):
-                                    broadcast_data = (message + "\n").encode()
-                                    self.broadcast_channel(broadcast_data, protocol_msg[2], [sock])
-                                    self.broadcast_servers(broadcast_data)
+                                # check that MSG message is valid (length of channel name and nickname), continue if it isn't
+                                if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
+                                    continue
+                                # Limit so that MSG can only be sent if joined the channel first, continue if channel is not joined
+                                if sock not in self.channels.get(protocol_msg[2]):
+                                    continue
+                                broadcast_data = (message + "\n").encode()
+                                self.broadcast_channel(broadcast_data, protocol_msg[2], [sock])
+                                self.broadcast_servers(broadcast_data)
 
                     # Client disconnected
                     except socket.error:
@@ -216,7 +230,11 @@ class SelectServer(Daemon):
                             protocol_msg = message.split(" ", 3)
                             if len(protocol_msg) != 4:
                                 continue
+                            # check that MSG message is valid (length of channel name and nickname), continue if it isn't
+                            if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
+                                continue
                             self.broadcast_channel((message + "\n").encode(), protocol_msg[2])
+
                         elif protocol_msg_id == "ALL_ADDRS":
                             all_addrs = message.split(" ")[1:]
                             if len(all_addrs) % 2 == 1:
@@ -376,7 +394,7 @@ class SelectServer(Daemon):
             try:
                 sock.connect(addr)
             except socket.error as e:
-                print("Failed to connect", ip, port, "due to", e)
+                print("Failed to connect", addr[0], ":", addr[1], "due to", e)
                 sock.close()
                 sock = None
                 continue
