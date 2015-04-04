@@ -170,6 +170,8 @@ class Client:
             self.ui.printString("Too long nick! (Max {})".format(Client.MAX_NICK_LEN))
         elif (len(new_nick) == 0):
             self.ui.printString("You did not give a proper nick.")
+        elif (new_nick == "SYSTEM"):
+            self.ui.printString("Prohibited nick.")
         else:
             self.nick = new_nick
             self.ui.nick = new_nick
@@ -191,7 +193,7 @@ class Client:
         else:
             self.rooms.append(Room(room_name))
             
-        message_format = "JOIN" + " " + self.rooms[-1].getRoomNetworkName() + "\n"      
+        message_format = "JOIN" + " " + self.nick + " " + self.rooms[-1].getRoomNetworkName() + "\n"      
         self.ui.printString("Joined room " + room_name + ".")
         self.sendString(message_format)
     
@@ -203,7 +205,7 @@ class Client:
         if (room == None):
             self.ui.printString("You are not in that room yet!")
             return
-        message_format = "PART" + " " + room.getRoomNetworkName() + "\n"
+        message_format = "PART" + " " + self.nick + " " + room.getRoomNetworkName() + "\n"
         self.ui.printString("Left room " + room.name + ".")
         self.rooms.remove(room)
         self.sendString(message_format)

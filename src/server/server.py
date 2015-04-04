@@ -53,7 +53,7 @@ class SelectServer(Daemon):
             self.logger.info("Server stopped.")
         except Exception as e:
             self.logger.exception("Uncaught exception: ")
-            print("Server shut down due to:", e)
+            raise e
         finally:
             print("Server stopped.")
 
@@ -178,21 +178,28 @@ class SelectServer(Daemon):
                             elif protocol_msg[0] == "HEART":
                                 sock.sendall("BLEED\n".encode())
 
-                        elif len(protocol_msg) == 2:
-                            # If len(protocol_msg) is 2, it is either JOIN or PART. Then protocol_msg[1] must be
-                            # name of the channel which must be shorter than CHANNELNAME_MAXLEN
-                            if len(protocol_msg[1]) > SelectServer.CHANNELNAME_MAXLEN:
+                        elif len(protocol_msg) == 3:
+                            # If len(protocol_msg) is 3, it is either JOIN or PART. Then protocol_msg[2] must be
+                            # name of the channel which must be shorter than CHANNELNAME_MAXLEN.
+                            # protocol_msg[2] is the nickname and it has to be shorter than NICKNAME_MAXLEN.
+                            if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
                                 continue
-
                             if protocol_msg[0] == "JOIN":
-                                self.channels.join(sock, protocol_msg[1])
+                                self.channels.join(sock, protocol_msg[2])
+                                join_msg = self.create_system_message(protocol_msg[2], protocol_msg[1] + " joined channel")
+                                self.broadcast_channel(join_msg.encode(), protocol_msg[2], None)
                             elif protocol_msg[0] == "PART":
-                                self.channels.part(sock, protocol_msg[1])
+                                self.channels.part(sock, protocol_msg[2])
+                                part_msg = self.create_system_message(protocol_msg[2], protocol_msg[1] + " left channel")
+                                self.broadcast_channel(part_msg.encode(), protocol_msg[2], None)
 
                         elif len(protocol_msg) == 4:
                             if protocol_msg[0] == "MSG":
                                 # check that MSG message is valid (length of channel name and nickname), continue if it isn't
                                 if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
+                                    continue
+                                # SYSTEM nick is reserved for system messages.
+                                if protocol_msg[1] == "SYSTEM":
                                     continue
                                 # Limit so that MSG can only be sent if joined the channel first, continue if channel is not joined
                                 if sock not in self.channels.get(protocol_msg[2]):
@@ -444,6 +451,9 @@ class SelectServer(Daemon):
     
     def sigterm_handler(self, _signo, _stack_frame):
         raise SystemExit
+    
+    def create_system_message(self, channel, message):
+        return "MSG" + " " + "SYSTEM" + " " + channel + " " + message + "\n"
 
     def logger_setup(self):
         log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
