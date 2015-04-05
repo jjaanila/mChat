@@ -513,7 +513,7 @@ class SelectServer(Daemon):
 
     # parameter message is a string, not bytes
     def send_system_message(self, channel, message):
-        byte_system_message = ("SYSTEM " + channel + " " + message).encode()
+        byte_system_message = ("SYSTEM " + channel + " " + message + "\n").encode()
         if len(byte_system_message) > SelectServer.PROTOCOL_MSG_MAXLEN:
             raise InvalidProtocolMessageError("Tried to send too long system message")
         self.broadcast_channel(byte_system_message, channel)
