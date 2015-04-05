@@ -58,7 +58,7 @@ class SelectServer(Daemon):
             print("Server stopped.")
 
     def start_server(self):
-        #Set signal handlers.
+        # Set signal handlers.
         signal.signal(signal.SIGTERM, self.sigterm_handler)
         
         # Lets give new servers heartbleed interval amount of time to connect
@@ -348,8 +348,15 @@ class SelectServer(Daemon):
 
         return bytes(total_data)
 
-    # TODO: check that this method and close_server work even if socket already closed and not stored in self.clients/servers
+    # This method should not raise error or do anything unexpected even if the socket is already closed or invalid
     def close_client(self, client_sock):
+        # check if this client has been closed already by trying to fetch nickname of client
+        try:
+            nick = self.clients.get_nickname(client_sock)
+        except ValueError:
+            # This is client is closed already, return
+            return
+
         try:
             client_name = client_sock.getpeername()
             print("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
@@ -360,8 +367,6 @@ class SelectServer(Daemon):
 
         # Part closing client from all channels
         parted_channels = self.channels.part_all(client_sock)
-        nick = self.clients.get_nickname(client_sock)
-
 
         self.clients.remove(client_sock)
         client_sock.close()
@@ -372,10 +377,17 @@ class SelectServer(Daemon):
             self.send_system_message(channel, nick + " left channel")
 
 
-
+    # This method should not raise error or do anything unexpected even if the socket is already closed or invalid
     def close_server(self, server_sock):
-        print("Closed server connection, IP: {}, port: {}".format(self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
-        self.logger.info("Closed server connection, IP: {}, port: {}".format(self.servers.get_socket_listen_addr(server_sock)[0], self.servers.get_socket_listen_addr(server_sock)[1]))
+        # check if this server has been closed already by trying to fetch its listen_addr
+        try:
+            listen_addr = self.servers.get_socket_listen_addr(server_sock)
+        except ValueError:
+            # This is server is closed already, return
+            return
+
+        print("Closed server connection, IP: {}, port: {}".format(listen_addr[0], listen_addr[1]))
+        self.logger.info("Closed server connection, IP: {}, port: {}".format(listen_addr[0], listen_addr[1]))
 
         self.servers.remove(server_sock)
         server_sock.close()
@@ -506,8 +518,6 @@ class SelectServer(Daemon):
             raise InvalidProtocolMessageError("Tried to send too long system message")
         self.broadcast_channel(byte_system_message, channel)
         self.broadcast_servers(byte_system_message)
-
-
 
 
 class InvalidProtocolMessageError(Exception):
