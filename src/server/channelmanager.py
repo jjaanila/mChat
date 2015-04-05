@@ -67,3 +67,10 @@ class ChannelManager():
         if self.channels.get(channel) is None:
             return []
         return self.channels.get(channel)
+
+    def get_channels_of_socket(self, sock):
+        socket_channels = []
+        for channel in self.channels:
+            if sock in self.channels[channel]:
+                socket_channels.append(channel)
+        return socket_channels

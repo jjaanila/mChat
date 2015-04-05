@@ -17,7 +17,7 @@ class ConnectionManager():
         self.listen_addrs = []  # A tuple with ip/dns as string and port as integer
         self.nickname = []
 
-    def add(self, sock, listen_addr=None, nickname=None):
+    def add(self, sock, listen_addr=None, nickname="NoName"):
         if len(self.sockets) < self.max_connections:
             if sock not in self.sockets:
                 self.sockets.append(sock)
@@ -80,9 +80,15 @@ class ConnectionManager():
         except ValueError:
             raise
 
+    # return True if a new nickname was set (that is different from the previous nick), otherwise return False
     def set_nickname(self, sock, nickname):
         try:
             conn_index = self.sockets.index(sock)
-            self.nickname[conn_index] = nickname
+            previous_nickname = self.nickname[conn_index]
+
+            if previous_nickname != nickname:
+                self.nickname[conn_index] = nickname
+                return True
         except ValueError:
             raise
+        return False

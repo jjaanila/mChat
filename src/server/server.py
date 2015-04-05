@@ -179,36 +179,49 @@ class SelectServer(Daemon):
                                 sock.sendall("BLEED\n".encode())
 
                         elif len(protocol_msg) == 2:
-                            # If len(protocol_msg) is 2, it is either JOIN or PART. Then protocol_msg[1] must be
-                            # name of the channel which must be shorter than CHANNELNAME_MAXLEN
-                            if len(protocol_msg[1]) > SelectServer.CHANNELNAME_MAXLEN:
-                                continue
 
                             if protocol_msg[0] == "JOIN":
                                 channel = protocol_msg[1]
+                                if len(channel) > SelectServer.CHANNELNAME_MAXLEN:
+                                    continue
                                 if self.channels.join(sock, channel):
                                     nick = self.clients.get_nickname(sock)
                                     self.send_system_message(channel, nick + " joined channel")
                             elif protocol_msg[0] == "PART":
                                 channel = protocol_msg[1]
+                                if len(channel) > SelectServer.CHANNELNAME_MAXLEN:
+                                    continue
                                 if self.channels.part(sock, channel):
                                     nick = self.clients.get_nickname(sock)
                                     self.send_system_message(channel, nick + " left channel")
+                            elif protocol_msg[0] == "NICK":
+                                nick = protocol_msg[1]
+                                if len(nick) > SelectServer.NICKNAME_MAXLEN:
+                                    continue
+                                old_nick = self.clients.get_nickname(sock)
+                                if nick != old_nick:
+                                    self.clients.set_nickname(sock, nick)
+                                    for channel in self.channels.get_channels_of_socket(sock):
+                                        self.send_system_message(channel, old_nick + " changed nickname to " + nick)
+
+
 
                         elif len(protocol_msg) == 4:
                             if protocol_msg[0] == "MSG":
+                                nick = protocol_msg[1]
                                 # check that MSG message is valid (length of channel name and nickname), continue if it isn't
-                                if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
+                                if (len(nick) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
                                     continue
                                 # Limit so that MSG can only be sent if joined the channel first, continue if channel is not joined
                                 if sock not in self.channels.get(protocol_msg[2]):
                                     continue
 
 
-                                # TODO this is a placeholder implementation. In the future we should maybe make a NICK
-                                # TODO protocol message and leave the nick from MSG messages. Then we should also send
-                                # TODO a system message when nick is changed
-                                self.clients.set_nickname(sock, protocol_msg[1])
+                                old_nick = self.clients.get_nickname(sock)
+                                if nick != old_nick:
+                                    self.clients.set_nickname(sock, nick)
+                                    for channel in self.channels.get_channels_of_socket(sock):
+                                        self.send_system_message(channel, old_nick + " changed nickname to " + nick)
 
 
                                 broadcast_data = (message + "\n").encode()
@@ -335,6 +348,7 @@ class SelectServer(Daemon):
 
         return bytes(total_data)
 
+    # TODO: check that this method and close_server work even if socket already closed and not stored in self.clients/servers
     def close_client(self, client_sock):
         try:
             client_name = client_sock.getpeername()
