@@ -144,7 +144,7 @@ class SelectServer(Daemon):
                         message = data.decode()  # decode bytes to utf-8
                         protocol_msg = message.split(" ")
                         if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
-                            self.servers.add(sock, (protocol_msg[1], int(protocol_msg[2])))
+                            self.servers.add(sock, listen_addr=(protocol_msg[1], int(protocol_msg[2])))
                             print("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.logger.info("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.candidate_server_socket = None
@@ -178,32 +178,39 @@ class SelectServer(Daemon):
                             elif protocol_msg[0] == "HEART":
                                 sock.sendall("BLEED\n".encode())
 
-                        elif len(protocol_msg) == 3:
-                            # If len(protocol_msg) is 3, it is either JOIN or PART. Then protocol_msg[2] must be
-                            # name of the channel which must be shorter than CHANNELNAME_MAXLEN.
-                            # protocol_msg[2] is the nickname and it has to be shorter than NICKNAME_MAXLEN.
-                            if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
+                        elif len(protocol_msg) == 2:
+                            # If len(protocol_msg) is 2, it is either JOIN or PART. Then protocol_msg[1] must be
+                            # name of the channel which must be shorter than CHANNELNAME_MAXLEN
+                            if len(protocol_msg[1]) > SelectServer.CHANNELNAME_MAXLEN:
                                 continue
+
                             if protocol_msg[0] == "JOIN":
-                                self.channels.join(sock, protocol_msg[2])
-                                join_msg = self.create_system_message(protocol_msg[2], protocol_msg[1] + " joined channel")
-                                self.broadcast_channel(join_msg.encode(), protocol_msg[2], None)
+                                channel = protocol_msg[1]
+                                if self.channels.join(sock, channel):
+                                    nick = self.clients.get_nickname(sock)
+                                    self.send_system_message(channel, nick + " joined channel")
                             elif protocol_msg[0] == "PART":
-                                self.channels.part(sock, protocol_msg[2])
-                                part_msg = self.create_system_message(protocol_msg[2], protocol_msg[1] + " left channel")
-                                self.broadcast_channel(part_msg.encode(), protocol_msg[2], None)
+                                channel = protocol_msg[1]
+                                if self.channels.part(sock, channel):
+                                    nick = self.clients.get_nickname(sock)
+                                    self.send_system_message(channel, nick + " left channel")
 
                         elif len(protocol_msg) == 4:
                             if protocol_msg[0] == "MSG":
                                 # check that MSG message is valid (length of channel name and nickname), continue if it isn't
                                 if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
                                     continue
-                                # SYSTEM nick is reserved for system messages.
-                                if protocol_msg[1] == "SYSTEM":
-                                    continue
                                 # Limit so that MSG can only be sent if joined the channel first, continue if channel is not joined
                                 if sock not in self.channels.get(protocol_msg[2]):
                                     continue
+
+
+                                # TODO this is a placeholder implementation. In the future we should maybe make a NICK
+                                # TODO protocol message and leave the nick from MSG messages. Then we should also send
+                                # TODO a system message when nick is changed
+                                self.clients.set_nickname(sock, protocol_msg[1])
+
+
                                 broadcast_data = (message + "\n").encode()
                                 self.broadcast_channel(broadcast_data, protocol_msg[2], [sock])
                                 self.broadcast_servers(broadcast_data)
@@ -257,14 +264,21 @@ class SelectServer(Daemon):
                             sock.sendall("BLEED\n".encode())
                         elif protocol_msg_id == "BLEED" and len(message.split(" ")) == 1:
                             self.servers.set_heartbleed_received(sock)
-                            
+                        elif protocol_msg_id == "SYSTEM":
+                            protocol_msg = message.split(" ", 2)
+                            if len(protocol_msg) != 3:
+                                continue
+                            if len(protocol_msg[1]) > SelectServer.CHANNELNAME_MAXLEN:
+                                continue
+                            self.broadcast_channel((message + "\n").encode(), protocol_msg[1])
+
                     except socket.error:
                         self.close_server(sock)
                         continue
                     # Not valid unicode message, ignore the message
                     except (UnicodeDecodeError, UnicodeEncodeError):
                         continue
-                        
+
 
     # Helper method for broadcasting to every other socket except sock (given as parameter)
     # and self.listen_sock
@@ -331,10 +345,18 @@ class SelectServer(Daemon):
             self.logger.info("Client offline, failed to fetch IP and port of the client")
 
         # Part closing client from all channels
-        self.channels.part_all(client_sock)
+        parted_channels = self.channels.part_all(client_sock)
+        nick = self.clients.get_nickname(client_sock)
+
 
         self.clients.remove(client_sock)
         client_sock.close()
+
+        # Send system message about the client leaving in the end of the method so that it does not get sent
+        # to the  client itself
+        for channel in parted_channels:
+            self.send_system_message(channel, nick + " left channel")
+
 
 
     def close_server(self, server_sock):
@@ -414,7 +436,7 @@ class SelectServer(Daemon):
             if server_sock == None:
                 continue
             try:
-                self.servers.add(server_sock, server_addr)
+                self.servers.add(server_sock, listen_addr=server_addr)
             # This server is already connected to maximum amount of other servers.
             except ConnectionAddError:
                 server_sock.close()
@@ -448,12 +470,9 @@ class SelectServer(Daemon):
                 continue
             break
         return sock
-    
+
     def sigterm_handler(self, _signo, _stack_frame):
         raise SystemExit
-    
-    def create_system_message(self, channel, message):
-        return "MSG" + " " + "SYSTEM" + " " + channel + " " + message + "\n"
 
     def logger_setup(self):
         log_formatter = logging.Formatter('%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s')
@@ -465,3 +484,17 @@ class SelectServer(Daemon):
         app_log.setLevel(logging.INFO)
         app_log.addHandler(my_handler)
         return app_log
+
+    # parameter message is a string, not bytes
+    def send_system_message(self, channel, message):
+        byte_system_message = ("SYSTEM " + channel + " " + message).encode()
+        if len(byte_system_message) > SelectServer.PROTOCOL_MSG_MAXLEN:
+            raise InvalidProtocolMessageError("Tried to send too long system message")
+        self.broadcast_channel(byte_system_message, channel)
+        self.broadcast_servers(byte_system_message)
+
+
+
+
+class InvalidProtocolMessageError(Exception):
+    pass

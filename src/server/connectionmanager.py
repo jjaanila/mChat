@@ -15,13 +15,15 @@ class ConnectionManager():
         self.heartbleed_status = []  # Integer telling how many HEART\n messages have not been answered with BLEED\n
                                      # message. Negative value means that an answer has been received during that cycle
         self.listen_addrs = []  # A tuple with ip/dns as string and port as integer
+        self.nickname = []
 
-    def add(self, sock, listen_addr=None):
+    def add(self, sock, listen_addr=None, nickname=None):
         if len(self.sockets) < self.max_connections:
             if sock not in self.sockets:
                 self.sockets.append(sock)
                 self.heartbleed_status.append(-1)
                 self.listen_addrs.append(listen_addr)
+                self.nickname.append(nickname)
             else:
                 raise ConnectionAddError("Socket is already added.")
         else:
@@ -40,7 +42,8 @@ class ConnectionManager():
             sock = self.sockets.pop(i)
             status = self.heartbleed_status.pop(i)
             addr = self.listen_addrs.pop(i)
-            return (sock, status, addr)
+            nick = self.nickname.pop(i)
+            return (sock, status, addr, nick)
         except IndexError:
             return None
 
@@ -49,7 +52,7 @@ class ConnectionManager():
             conn_index = self.sockets.index(sock)
             self.heartbleed_status[conn_index] = -1
         except ValueError:
-            return
+            raise
 
     # Returns listen_address of socket. Raises ValueError if socket not self.sockets
     def get_socket_listen_addr(self, sock):
@@ -66,5 +69,20 @@ class ConnectionManager():
             conn_index = self.sockets.index(sock)
             return self.heartbleed_status[conn_index]
         # Socket not in self.sockets. Raise error
+        except ValueError:
+            raise
+
+    def get_nickname(self, sock):
+        try:
+            conn_index = self.sockets.index(sock)
+            return self.nickname[conn_index]
+        # Socket not in self.sockets. Raise error
+        except ValueError:
+            raise
+
+    def set_nickname(self, sock, nickname):
+        try:
+            conn_index = self.sockets.index(sock)
+            self.nickname[conn_index] = nickname
         except ValueError:
             raise
