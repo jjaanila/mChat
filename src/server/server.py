@@ -124,7 +124,7 @@ class SelectServer(Daemon):
                         for address in self.servers.listen_addrs:
                             new_part = " " + address[0] + " " + str(address[1])
                             appended_message = message + new_part
-                            if len(appended_message.encode()) >= SelectServer.PROTOCOL_MSG_MAXLEN:
+                            if len(appended_message) >= SelectServer.PROTOCOL_MSG_MAXLEN:
                                 sockfd.sendall((message + "\n").encode())
                                 message = "ALL_ADDRS" + new_part
                                 continue
@@ -148,7 +148,6 @@ class SelectServer(Daemon):
                             print("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.logger.info("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
                             self.candidate_server_socket = None
-                            candidate_server_timer.reset()
                     except socket.error:
                         sock.close()
                         self.candidate_server_socket = None
@@ -172,6 +171,7 @@ class SelectServer(Daemon):
                         data = self.recv_until_newline(sock)
                         message = data.decode()  # decode bytes to utf-8
                         protocol_msg = message.split(" ", 3)
+
                         if len(protocol_msg) == 1:
                             if protocol_msg[0] == "BLEED":
                                 self.clients.set_heartbleed_received(sock)
@@ -179,7 +179,6 @@ class SelectServer(Daemon):
                                 sock.sendall("BLEED\n".encode())
 
                         elif len(protocol_msg) == 2:
-
                             if protocol_msg[0] == "JOIN":
                                 channel = protocol_msg[1]
                                 if len(channel) > SelectServer.CHANNELNAME_MAXLEN:
@@ -204,8 +203,6 @@ class SelectServer(Daemon):
                                     for channel in self.channels.get_channels_of_socket(sock):
                                         self.send_system_message(channel, old_nick + " changed nickname to " + nick)
 
-
-
                         elif len(protocol_msg) == 4:
                             if protocol_msg[0] == "MSG":
                                 nick = protocol_msg[1]
@@ -216,13 +213,11 @@ class SelectServer(Daemon):
                                 if sock not in self.channels.get(protocol_msg[2]):
                                     continue
 
-
                                 old_nick = self.clients.get_nickname(sock)
                                 if nick != old_nick:
                                     self.clients.set_nickname(sock, nick)
                                     for channel in self.channels.get_channels_of_socket(sock):
                                         self.send_system_message(channel, old_nick + " changed nickname to " + nick)
-
 
                                 broadcast_data = (message + "\n").encode()
                                 self.broadcast_channel(broadcast_data, protocol_msg[2], [sock])
@@ -327,11 +322,11 @@ class SelectServer(Daemon):
                     else:
                         raise
 
-    # Call recv() until newline (success) or PROTOCOL_MSG_MAXLEN bytes received
+    # Call recv() until newline (success) or PROTOCOL_MSG_MAXLEN * 4 bytes received (utf-8 char is max 4 bytes)
     # Returns message received before newline. Does NOT return the newline character.
     # raises socket.error
     def recv_until_newline(self, sock):
-        max_len = SelectServer.PROTOCOL_MSG_MAXLEN
+        max_len = SelectServer.PROTOCOL_MSG_MAXLEN * 4
         total_data = bytearray()
         while max_len > 0:
             try:
@@ -513,9 +508,10 @@ class SelectServer(Daemon):
 
     # parameter message is a string, not bytes
     def send_system_message(self, channel, message):
-        byte_system_message = ("SYSTEM " + channel + " " + message + "\n").encode()
-        if len(byte_system_message) > SelectServer.PROTOCOL_MSG_MAXLEN:
-            raise InvalidProtocolMessageError("Tried to send too long system message")
+        system_message = "SYSTEM " + channel + " " + message + "\n"
+        if len(system_message) > SelectServer.PROTOCOL_MSG_MAXLEN or len(channel) > SelectServer.CHANNELNAME_MAXLEN:
+            raise InvalidProtocolMessageError("Tried to send invalid system message")
+        byte_system_message = system_message.encode()
         self.broadcast_channel(byte_system_message, channel)
         self.broadcast_servers(byte_system_message)
 
