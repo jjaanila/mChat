@@ -74,18 +74,19 @@ class Client:
             if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
                 room = self.getRoom(protocol_msg[2])
                 if room != None:
-                    self.ui.printString("<" + room.name + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+                    self.ui.printString("<" + room.name + "> " + protocol_msg[1] + ": " + protocol_msg[2])
                 else:
                     #Message from a room the client does not belong to.
-                    self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+                    self.ui.printString("<" + protocol_msg[1] + "> " + protocol_msg[2] + "DEBUG: #Message from a room the client does not belong to.")
                     
-            elif protocol_msg[0] == "SYSTEM" and len(protocol_msg) == 3:
+            elif protocol_msg[0] == "SYSTEM" and len(protocol_msg) >= 3:
                 room = self.getRoom(protocol_msg[1])
+                message = " ".join(protocol_msg[2:])
                 if room != None:
-                    self.ui.printString("<" + room.name + "> " + protocol_msg[0] + ": " + protocol_msg[2])
+                    self.ui.printString("<" + room.name + "> " + protocol_msg[0] + ": " + message)
                 else:
                     #Message from a room the client does not belong to.
-                    self.ui.printString("<" + protocol_msg[1] + "> " + protocol_msg[0] + ": " + protocol_msg[2])
+                    self.ui.printString("<" + protocol_msg[1] + "> " + protocol_msg[2] + ": " + message + "DEBUG: #Message from a room the client does not belong to.")
                     
             elif protocol_msg[0] == "HEART":
                 self.sendString("BLEED\n")
@@ -131,6 +132,7 @@ class Client:
         if self.heartbleed_on:
             self.sendKeepAliveMessage()#Will continue sending in a separate thread.
             self.heartbleed_timer.start()
+        self.sendString("NICK " + self.nick + "\n")
         self.ui.printString("Connected to " + ip + ":" + str(port))
         
     def disconnect(self):
