@@ -8,10 +8,10 @@ from fancyui import FancyUI
 from rooms import Room, PrivateRoom
 
 class Client:
-    BUFFER_SIZE = 1024
+    BUFFER_SIZE = 4096
     MAX_NICK_LEN = 32
     MAX_ROOM_LEN = 64
-    MAX_MSG_LEN = 1024
+    MAX_MSG_LEN = 1024 #Max size in bytes: 4096
     
     def __init__(self, nick, is_heartbleed_on=False, prints_disabled=False):
         self.socket = None
@@ -78,8 +78,18 @@ class Client:
                 else:
                     #Message from a room the client does not belong to.
                     self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + ": " + protocol_msg[3])
+                    
+            elif protocol_msg[0] == "SYSTEM" and len(protocol_msg) == 3:
+                room = self.getRoom(protocol_msg[1])
+                if room != None:
+                    self.ui.printString("<" + room.name + "> " + protocol_msg[0] + ": " + protocol_msg[2])
+                else:
+                    #Message from a room the client does not belong to.
+                    self.ui.printString("<" + protocol_msg[1] + "> " + protocol_msg[0] + ": " + protocol_msg[2])
+                    
             elif protocol_msg[0] == "HEART":
                 self.sendString("BLEED\n")
+                
             elif protocol_msg[0] == "BLEED":
                 if self.heartbleed_on:
                     self.heartbleed_timer.start()
@@ -170,11 +180,10 @@ class Client:
             self.ui.printString("Too long nick! (Max {})".format(Client.MAX_NICK_LEN))
         elif (len(new_nick) == 0):
             self.ui.printString("You did not give a proper nick.")
-        elif (new_nick == "SYSTEM"):
-            self.ui.printString("Prohibited nick.")
         else:
             self.nick = new_nick
             self.ui.nick = new_nick
+            self.sendString("NICK " + new_nick + "\n")
             self.ui.printString("Nick changed to " + new_nick + ".")
         
     def join(self, room_name, password=None):
@@ -193,7 +202,7 @@ class Client:
         else:
             self.rooms.append(Room(room_name))
             
-        message_format = "JOIN" + " " + self.nick + " " + self.rooms[-1].getRoomNetworkName() + "\n"      
+        message_format = "JOIN" + " " + self.rooms[-1].getRoomNetworkName() + "\n"      
         self.ui.printString("Joined room " + room_name + ".")
         self.sendString(message_format)
     
