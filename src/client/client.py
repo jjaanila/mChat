@@ -77,7 +77,7 @@ class Client:
                     self.ui.printString("<" + room.name + "> " + protocol_msg[1] + ": " + protocol_msg[2])
                 else:
                     #Message from a room the client does not belong to.
-                    self.ui.printString("<" + protocol_msg[1] + "> " + protocol_msg[2] + "DEBUG: #Message from a room the client does not belong to.")
+                    self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + "DEBUG: #Message from a room the client does not belong to.")
                     
             elif protocol_msg[0] == "SYSTEM" and len(protocol_msg) >= 3:
                 room = self.getRoom(protocol_msg[1])
@@ -86,7 +86,7 @@ class Client:
                     self.ui.printString("<" + room.name + "> " + protocol_msg[0] + ": " + message)
                 else:
                     #Message from a room the client does not belong to.
-                    self.ui.printString("<" + protocol_msg[1] + "> " + protocol_msg[2] + ": " + message + "DEBUG: #Message from a room the client does not belong to.")
+                    self.ui.printString("<" + protocol_msg[1] + "> " + protocol_msg[0] + ": " + message + "DEBUG: #Message from a room the client does not belong to.")
                     
             elif protocol_msg[0] == "HEART":
                 self.sendString("BLEED\n")
