@@ -23,6 +23,7 @@ class ChannelManager():
         else:
             if len(self.channels) < self.max_channels:
                 self.channels[channel] = [socket]
+                return True
             else:
                 raise ChannelJoinError("Too many channels. Can't create more.")
 
