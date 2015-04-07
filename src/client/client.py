@@ -74,7 +74,7 @@ class Client:
             if protocol_msg[0] == "MSG" and len(protocol_msg) == 4:
                 room = self.getRoom(protocol_msg[2])
                 if room != None:
-                    self.ui.printString("<" + room.name + "> " + protocol_msg[1] + ": " + protocol_msg[2])
+                    self.ui.printString("<" + room.name + "> " + protocol_msg[1] + ": " + protocol_msg[3])
                 else:
                     #Message from a room the client does not belong to.
                     self.ui.printString("<" + protocol_msg[2] + "> " + protocol_msg[1] + "DEBUG: #Message from a room the client does not belong to.")
@@ -216,7 +216,7 @@ class Client:
         if (room == None):
             self.ui.printString("You are not in that room yet!")
             return
-        message_format = "PART" + " " + self.nick + " " + room.getRoomNetworkName() + "\n"
+        message_format = "PART" + " " + room.getRoomNetworkName() + "\n"
         self.ui.printString("Left room " + room.name + ".")
         self.rooms.remove(room)
         self.sendString(message_format)
