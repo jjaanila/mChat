@@ -1,4 +1,4 @@
-from server import SelectServer
+from server import MChatServer
 from random import randint
 
 """
@@ -10,7 +10,7 @@ This script creates servers that connect to the same network.
 def main():
     pidfile = "/tmp/select-server-daemon.pid"
 
-    server = SelectServer(pidfile, "localhost", randint(2000, 65000), randint(2000, 65000), "localhost", 6071)
+    server = MChatServer(pidfile, "localhost", randint(2000, 65000), randint(2000, 65000), "localhost", 6071)
     server.run()
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ from timer import Timer
 
 
 
-class SelectServer(Daemon):
+class MChatServer(Daemon):
     PROTOCOL_MSG_MAXLEN = 1024
     NICKNAME_MAXLEN = 32
     CHANNELNAME_MAXLEN = 64
@@ -32,19 +32,19 @@ class SelectServer(Daemon):
         if (existing_server_ip is not None) and (existing_server_port is not None):
             self.not_connected_servers.append((existing_server_ip, existing_server_port))
 
-        self.servers = ConnectionManager(SelectServer.MAX_SERVERS, ConnectionManager.TYPE_SERVER)
-        self.clients = ConnectionManager(SelectServer.MAX_CLIENTS, ConnectionManager.TYPE_CLIENT)
-        self.channels = ChannelManager(SelectServer.MAX_CHANNELS, SelectServer.MAX_CLIENTS_PER_CHANNEL)
+        self.servers = ConnectionManager(MChatServer.MAX_SERVERS, ConnectionManager.TYPE_SERVER)
+        self.clients = ConnectionManager(MChatServer.MAX_CLIENTS, ConnectionManager.TYPE_CLIENT)
+        self.channels = ChannelManager(MChatServer.MAX_CHANNELS, MChatServer.MAX_CLIENTS_PER_CHANNEL)
         self.ip = ip
         self.client_listen_port = client_listen_port
         self.server_listen_port = server_listen_port
         self.server_listen_socket = None
         self.client_listen_socket = None
-        self.heartbleed_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
+        self.heartbleed_timer = Timer(MChatServer.HEARTBLEED_INTERVAL)
         self.candidate_server_socket = None
         self.logger = self.logger_setup()
 
-        super(SelectServer, self).__init__(pidfile)
+        super(MChatServer, self).__init__(pidfile)
         
     def run(self):
         try:
@@ -62,7 +62,7 @@ class SelectServer(Daemon):
         signal.signal(signal.SIGTERM, self.sigterm_handler)
         
         # Lets give new servers heartbleed interval amount of time to connect
-        candidate_server_timer = Timer(SelectServer.HEARTBLEED_INTERVAL)
+        candidate_server_timer = Timer(MChatServer.HEARTBLEED_INTERVAL)
 
         # Listen socket for accepting incoming connections
         self.client_listen_socket = self.create_listen_socket(self.ip, self.client_listen_port)
@@ -95,7 +95,7 @@ class SelectServer(Daemon):
             if self.candidate_server_socket != None:
                 try_to_read_from_sockets.append(self.candidate_server_socket)
 
-            read_sockets, write_sockets, error_sockets = select.select(try_to_read_from_sockets, [], [], SelectServer.HEARTBLEED_INTERVAL)
+            read_sockets, write_sockets, error_sockets = select.select(try_to_read_from_sockets, [], [], MChatServer.HEARTBLEED_INTERVAL)
 
             for sock in read_sockets:
 
@@ -124,7 +124,7 @@ class SelectServer(Daemon):
                         for address in self.servers.listen_addrs:
                             new_part = " " + address[0] + " " + str(address[1])
                             appended_message = message + new_part
-                            if len(appended_message) >= SelectServer.PROTOCOL_MSG_MAXLEN:
+                            if len(appended_message) >= MChatServer.PROTOCOL_MSG_MAXLEN:
                                 sockfd.sendall((message + "\n").encode())
                                 message = "ALL_ADDRS" + new_part
                                 continue
@@ -181,21 +181,21 @@ class SelectServer(Daemon):
                         elif len(protocol_msg) == 2:
                             if protocol_msg[0] == "JOIN":
                                 channel = protocol_msg[1]
-                                if len(channel) > SelectServer.CHANNELNAME_MAXLEN:
+                                if len(channel) > MChatServer.CHANNELNAME_MAXLEN:
                                     continue
                                 if self.channels.join(sock, channel):
                                     nick = self.clients.get_nickname(sock)
                                     self.send_system_message(channel, nick + " joined channel")
                             elif protocol_msg[0] == "PART":
                                 channel = protocol_msg[1]
-                                if len(channel) > SelectServer.CHANNELNAME_MAXLEN:
+                                if len(channel) > MChatServer.CHANNELNAME_MAXLEN:
                                     continue
                                 if self.channels.part(sock, channel):
                                     nick = self.clients.get_nickname(sock)
                                     self.send_system_message(channel, nick + " left channel")
                             elif protocol_msg[0] == "NICK":
                                 nick = protocol_msg[1]
-                                if len(nick) > SelectServer.NICKNAME_MAXLEN:
+                                if len(nick) > MChatServer.NICKNAME_MAXLEN:
                                     continue
                                 old_nick = self.clients.get_nickname(sock)
                                 if nick != old_nick:
@@ -207,7 +207,7 @@ class SelectServer(Daemon):
                             if protocol_msg[0] == "MSG":
                                 nick = protocol_msg[1]
                                 # check that MSG message is valid (length of channel name and nickname), continue if it isn't
-                                if (len(nick) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
+                                if (len(nick) > MChatServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > MChatServer.CHANNELNAME_MAXLEN):
                                     continue
                                 # Limit so that MSG can only be sent if joined the channel first, continue if channel is not joined
                                 if sock not in self.channels.get(protocol_msg[2]):
@@ -253,7 +253,7 @@ class SelectServer(Daemon):
                             if len(protocol_msg) != 4:
                                 continue
                             # check that MSG message is valid (length of channel name and nickname), continue if it isn't
-                            if (len(protocol_msg[1]) > SelectServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > SelectServer.CHANNELNAME_MAXLEN):
+                            if (len(protocol_msg[1]) > MChatServer.NICKNAME_MAXLEN) or (len(protocol_msg[2]) > MChatServer.CHANNELNAME_MAXLEN):
                                 continue
                             self.broadcast_channel((message + "\n").encode(), protocol_msg[2])
 
@@ -276,7 +276,7 @@ class SelectServer(Daemon):
                             protocol_msg = message.split(" ", 2)
                             if len(protocol_msg) != 3:
                                 continue
-                            if len(protocol_msg[1]) > SelectServer.CHANNELNAME_MAXLEN:
+                            if len(protocol_msg[1]) > MChatServer.CHANNELNAME_MAXLEN:
                                 continue
                             self.broadcast_channel((message + "\n").encode(), protocol_msg[1])
 
@@ -326,7 +326,7 @@ class SelectServer(Daemon):
     # Returns message received before newline. Does NOT return the newline character.
     # raises socket.error
     def recv_until_newline(self, sock):
-        max_len = SelectServer.PROTOCOL_MSG_MAXLEN * 4
+        max_len = MChatServer.PROTOCOL_MSG_MAXLEN * 4
         total_data = bytearray()
         while max_len > 0:
             try:
@@ -400,7 +400,7 @@ class SelectServer(Daemon):
         for i in range(len(conn_manager.heartbleed_status)):
             if conn_manager.heartbleed_status[i] < 0:
                 conn_manager.heartbleed_status[i] = 0
-            elif conn_manager.heartbleed_status[i] < SelectServer.MISSING_HEARTBLEEDS_ACCEPTED:
+            elif conn_manager.heartbleed_status[i] < MChatServer.MISSING_HEARTBLEEDS_ACCEPTED:
                 conn_manager.heartbleed_status[i] += 1
             else:
                 dead_sockets.append(conn_manager.sockets[i])
@@ -509,7 +509,7 @@ class SelectServer(Daemon):
     # parameter message is a string, not bytes
     def send_system_message(self, channel, message):
         system_message = "SYSTEM " + channel + " " + message + "\n"
-        if len(system_message) > SelectServer.PROTOCOL_MSG_MAXLEN or len(channel) > SelectServer.CHANNELNAME_MAXLEN:
+        if len(system_message) > MChatServer.PROTOCOL_MSG_MAXLEN or len(channel) > MChatServer.CHANNELNAME_MAXLEN:
             raise InvalidProtocolMessageError("Tried to send invalid system message")
         byte_system_message = system_message.encode()
         self.broadcast_channel(byte_system_message, channel)

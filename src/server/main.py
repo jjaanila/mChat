@@ -1,4 +1,4 @@
-from server import SelectServer
+from server import MChatServer
 import sys
 
 
@@ -29,7 +29,7 @@ def main():
             remote_port = int(sys.argv[6])
 
         if 'start' == sys.argv[1]:
-            server = SelectServer(pidfile, ip, client_port, server_port, remote_ip, remote_port)
+            server = MChatServer(pidfile, ip, client_port, server_port, remote_ip, remote_port)
             if daemon:
                 server.start()
             else:
@@ -37,7 +37,7 @@ def main():
             print("Server started.")
         elif 'restart' == sys.argv[1]:
             # NOTE: This might need some some rethinking when it comes to the parameters
-            server = SelectServer(pidfile, ip, client_port, server_port)
+            server = MChatServer(pidfile, ip, client_port, server_port)
             server.restart()
             print("Server restarted.")
         else:
@@ -47,7 +47,7 @@ def main():
 
     elif len(sys.argv) == 2:
         if 'stop' == sys.argv[1]:
-            server = SelectServer(pidfile, "", 0, 0)  # only pidfile has to be correct here
+            server = MChatServer(pidfile, "", 0, 0)  # only pidfile has to be correct here
             server.stop()
             print("Server stopped.")
         else:
