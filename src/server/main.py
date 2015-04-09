@@ -9,7 +9,7 @@ import sys
 
 # Istructions for start and stop, no restart
 def print_instructions(program_name):
-    print("""usage: %s start [-d] <ip> <client_port> <server_port> [<remote_ip> <remote_port>]
+    print("""usage: %s start [--non-daemon] <ip> <client_port> <server_port> [<remote_ip> <remote_port>]
  | stop <ip> <client_port>""" % program_name)
 
 
@@ -17,10 +17,10 @@ def main():
 
     try:
         # raises ValueError if not present:
-        sys.argv.remove("-d")
-        daemon = True
-    except ValueError:
+        sys.argv.remove("--non-daemon")
         daemon = False
+    except ValueError:
+        daemon = True
 
     if len(sys.argv) == 5 or len(sys.argv) == 7:
         ip = sys.argv[2]
