@@ -60,7 +60,7 @@ class MChatServer(Daemon):
         except (KeyboardInterrupt, SystemExit):
             self.logger.info("Server stopped.")
         except Exception as e:
-            self.logger.exception("Uncaught exception: ")
+            self.logger.exception("Uncaught exception:")
             raise e
         finally:
             print("Server stopped.")
@@ -78,9 +78,9 @@ class MChatServer(Daemon):
         if self.client_listen_socket == None or self.server_listen_socket == None:
             sys.exit("Failed to open listen sockets to given hostname and port combination.")
 
-        start_msg = "Server started on '{}'. Client port: {}, Server port: {}".format(self.ip, self.client_listen_port, self.server_listen_port)
-        print(start_msg)
-        self.logger.info(start_msg)
+        log_message = "Server started on '{}'. Client port: {}, Server port: {}".format(self.ip, self.client_listen_port, self.server_listen_port)
+        print(log_message)
+        self.logger.info(log_message)
 
         self.heartbleed_timer.start()
 
@@ -112,9 +112,9 @@ class MChatServer(Daemon):
                     sockfd, addr = self.client_listen_socket.accept()
                     try:
                         self.clients.add(sockfd)
-                        # Tell about the new connection to server admin and other clients
-                        print("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
-                        self.logger.info("Client connected, IP: {}, port: {}".format(addr[0], addr[1]))
+                        log_message = "Client connected, IP: {}, port: {}".format(addr[0], addr[1])
+                        print(log_message)
+                        self.logger.info(log_message)
                     except ConnectionAddError:
                         """
                         TODO: Tell client that server is full. Our protocol doesn't define how to do this so let's
@@ -153,8 +153,11 @@ class MChatServer(Daemon):
                         protocol_msg = message.split(" ")
                         if len(protocol_msg) == 3 and protocol_msg[0] == "MY_ADDR":
                             self.servers.add(sock, listen_addr=(protocol_msg[1], int(protocol_msg[2])))
-                            print("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
-                            self.logger.info("Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2]))
+
+                            log_message = "Server connected, IP: {}, server listen port: {}".format(protocol_msg[1], protocol_msg[2])
+                            print(log_message)
+                            self.logger.info(log_message)
+
                             self.candidate_server_socket = None
                     except socket.error:
                         sock.close()
@@ -362,11 +365,13 @@ class MChatServer(Daemon):
 
         try:
             client_name = client_sock.getpeername()
-            print("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
-            self.logger.info("Client offline, IP: {}, port: {}".format(client_name[0], client_name[1]))
+            log_message = "Client offline, IP: {}, port: {}".format(client_name[0], client_name[1])
+            print(log_message)
+            self.logger.info(log_message)
         except socket.error:
-            print("Client offline, failed to fetch IP and port of the client")
-            self.logger.info("Client offline, failed to fetch IP and port of the client")
+            log_message = "Client offline, failed to fetch IP and port of the client"
+            print(log_message)
+            self.logger.info(log_message)
 
         # Part closing client from all channels
         parted_channels = self.channels.part_all(client_sock)
@@ -389,8 +394,9 @@ class MChatServer(Daemon):
             # This is server is closed already, return
             return
 
-        print("Closed server connection, IP: {}, port: {}".format(listen_addr[0], listen_addr[1]))
-        self.logger.info("Closed server connection, IP: {}, port: {}".format(listen_addr[0], listen_addr[1]))
+        log_message = "Closed server connection, IP: {}, port: {}".format(listen_addr[0], listen_addr[1])
+        print(log_message)
+        self.logger.info(log_message)
 
         self.servers.remove(server_sock)
         server_sock.close()
@@ -452,7 +458,9 @@ class MChatServer(Daemon):
             try:
                 sock.connect(addr)
             except socket.error as e:
-                print("Failed to connect", addr[0], ":", addr[1], "due to", e)
+                log_message = "Failed to connect {}:{} due to {}".format(addr[0], addr[1], e)
+                print(log_message)
+                self.logger.error(log_message)
                 sock.close()
                 sock = None
                 continue
@@ -493,7 +501,9 @@ class MChatServer(Daemon):
                 sock.bind(addr)
                 sock.listen(128)  # parameter value = maximum number of queued connections
             except socket.error as e:
-                print("Failed to connect", addr[0], ":", addr[1], "due to", e)
+                log_message = "Failed to bind listen socket to address {}:{} due to {}".format(addr[0], addr[1], e)
+                print(log_message)
+                self.logger.error(log_message)
                 sock.close()
                 sock = None
                 continue
