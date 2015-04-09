@@ -14,6 +14,11 @@ from timer import Timer
 
 
 class MChatServer(Daemon):
+    """
+    start() is inherited from Daemon class and starts the server as a daemon
+    run() should be used to run the server as a non-daemon
+    """
+    
     PROTOCOL_MSG_MAXLEN = 1024
     NICKNAME_MAXLEN = 32
     CHANNELNAME_MAXLEN = 64
@@ -47,6 +52,9 @@ class MChatServer(Daemon):
         super(MChatServer, self).__init__(pidfile)
         
     def run(self):
+        """
+        Overrides run() of parent class Daemon
+        """
         try:
             self.start_server()
         except (KeyboardInterrupt, SystemExit):
