@@ -37,9 +37,9 @@ def main():
             server = MChatServer(pidfile, ip, client_port, server_port, remote_ip, remote_port)
             if daemon:
                 server.start()
+                print("Server started.")
             else:
                 server.run()
-            print("Server started.")
         #elif 'restart' == sys.argv[1]:
         #    # NOTE: This might need some some rethinking when it comes to the parameters
         #    pidfile = "/tmp/select-server-daemon.pid"
