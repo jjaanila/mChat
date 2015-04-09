@@ -47,7 +47,7 @@ class MChatServer(Daemon):
         self.client_listen_socket = None
         self.heartbleed_timer = Timer(MChatServer.HEARTBLEED_INTERVAL)
         self.candidate_server_socket = None
-        self.logger = self.logger_setup()
+        self.logger = None
 
         super(MChatServer, self).__init__(pidfile)
         
@@ -55,8 +55,9 @@ class MChatServer(Daemon):
         """
         Overrides run() of parent class Daemon
         """
+        self.logger = self.logger_setup()
         try:
-            self.start_server()
+            self.__start_server()
         except (KeyboardInterrupt, SystemExit):
             self.logger.info("Server stopped.")
         except Exception as e:
@@ -65,7 +66,10 @@ class MChatServer(Daemon):
         finally:
             print("Server stopped.")
 
-    def start_server(self):
+    def __start_server(self):
+        """
+        Only run this function from the run() wrapper.
+        """
         # Set signal handlers.
         signal.signal(signal.SIGTERM, self.sigterm_handler)
         
