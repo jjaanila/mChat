@@ -444,6 +444,9 @@ class MChatServer(Daemon):
 
     # Return connected socket or None if unsuccessful
     def connect(self, ip, port):
+		# prevent connections to own ip and server ports
+        if ip == self.ip and (port == self.client_listen_port or port == self.server_listen_port):
+            return None
         sock = None
 
         try:
