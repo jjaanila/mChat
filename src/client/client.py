@@ -226,7 +226,7 @@ class Client:
             thread.start()
             
     def checkTimers(self):
-        if (self.heartbleed_timer.hasExpired()):
+        if (self.heartbleed_timer.has_expired()):
             self.ui.printString("Server lost! Disconnecting...")
             self.disconnect()
         
