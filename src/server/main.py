@@ -1,4 +1,5 @@
 from server import MChatServer
+from daemon import Daemon
 import sys
 
 
@@ -42,8 +43,8 @@ def main():
     elif len(sys.argv) == 4:
         pidfile = "/tmp/mchat_" + sys.argv[2] + "_" + sys.argv[3] + ".pid"
         if 'stop' == sys.argv[1]:
-            server = MChatServer(pidfile, "", 0, 0)  # only pidfile has to be correct here
-            server.stop()
+            server_daemon = Daemon(pidfile)
+            server_daemon.stop()
             print("Server stopped.")
         else:
             print_instructions(sys.argv[0])
