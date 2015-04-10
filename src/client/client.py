@@ -13,14 +13,13 @@ class Client:
     MAX_ROOM_LEN = 64
     MAX_MSG_LEN = 1024 #Max size in bytes: 4096
     
-    def __init__(self, nick, is_heartbleed_on=False, prints_disabled=False):
+    def __init__(self, nick, prints_disabled=False):
         self.socket = None
         self.nick = nick
         self.rooms = []
 
-        self.heartbleed_on = is_heartbleed_on
         self.heartbleed_interval = 2
-        self.heartbleed_timer = Timer(6)
+        self.heartbleed_timer = Timer(5)
         
         self.ui = FancyUI(nick, prints_disabled)
         
@@ -92,8 +91,7 @@ class Client:
                 self.sendString("BLEED\n")
                 
             elif protocol_msg[0] == "BLEED":
-                if self.heartbleed_on:
-                    self.heartbleed_timer.start()
+                self.heartbleed_timer.start()
             else:
                 self.ui.printString("Unidentified message: " + messages[0])
     
@@ -129,9 +127,8 @@ class Client:
         t = threading.Thread(target=self.receiveMessagesAndCheckTimers)
         t.daemon = True
         t.start()
-        if self.heartbleed_on:
-            self.sendKeepAliveMessage()#Will continue sending in a separate thread.
-            self.heartbleed_timer.start()
+        self.sendKeepAliveMessage()#Will continue sending in a separate thread.
+        self.heartbleed_timer.start()
         self.sendString("NICK " + self.nick + "\n")
         self.ui.printString("Connected to " + ip + ":" + str(port))
         
@@ -229,10 +226,9 @@ class Client:
             thread.start()
             
     def checkTimers(self):
-        if self.heartbleed_on:
-            if (self.heartbleed_timer.hasExpired()):
-                self.ui.printString("Server lost! Disconnecting...")
-                self.disconnect()
+        if (self.heartbleed_timer.hasExpired()):
+            self.ui.printString("Server lost! Disconnecting...")
+            self.disconnect()
         
     def printHelp(self):
         self.ui.printString("""Commands:
@@ -300,11 +296,9 @@ def main():
     h = False
     d = False
     if len(sys.argv) > 1:
-        if "-h" in sys.argv:
-            h = True
         if "-d" in sys.argv:
             d = True
-    client = Client("mChatter", is_heartbleed_on=h, prints_disabled=d)
+    client = Client("mChatter", prints_disabled=d)
     client.run()
 
 
