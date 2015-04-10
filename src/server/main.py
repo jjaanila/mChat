@@ -1,13 +1,7 @@
 from server import MChatServer
 import sys
 
-# Instructions for start, restart and stop
-#def print_instructions(program_name):
-#    print("""usage: %s start [-d] <ip> <client_port> <server_port> [<remote_ip> <remote_port>]
-# | restart <ip> <client_port> <server_port>
-# | stop <ip> <client_port>""" % program_name)
 
-# Istructions for start and stop, no restart
 def print_instructions(program_name):
     print("""usage: %s start [--non-daemon] <ip> <client_port> <server_port> [<remote_ip> <remote_port>]
  | stop <ip> <client_port>""" % program_name)
@@ -40,12 +34,6 @@ def main():
                 print("Server started.")
             else:
                 server.run()
-        #elif 'restart' == sys.argv[1]:
-        #    # NOTE: This might need some some rethinking when it comes to the parameters
-        #    pidfile = "/tmp/select-server-daemon.pid"
-        #    server = MChatServer(pidfile, ip, client_port, server_port)
-        #    server.restart()
-        #    print("Server restarted.")
         else:
             print_instructions(sys.argv[0])
             sys.exit(2)
